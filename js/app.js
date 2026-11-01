@@ -115,7 +115,10 @@
   const procBadgeDrawer = document.getElementById('procBadgeDrawer');
   const btnDrawerProcesses = document.getElementById('btnDrawerProcesses');
   const btnDrawerFiles = document.getElementById('btnDrawerFiles');
+  const btnDrawerGuide = document.getElementById('btnDrawerGuide');
   const btnDrawerRestart = document.getElementById('btnDrawerRestart');
+  const systemGuideModal = document.getElementById('systemGuideModal');
+  const btnCloseSystemGuide = document.getElementById('btnCloseSystemGuide');
 
   // Processes Modal Elements
   const processesModal = document.getElementById('processesModal');
@@ -2454,6 +2457,22 @@
     // Drawer tool buttons
     if (btnDrawerProcesses) btnDrawerProcesses.addEventListener('click', openProcessesModal);
     if (btnDrawerFiles) btnDrawerFiles.addEventListener('click', openFilesModal);
+    if (btnDrawerGuide && systemGuideModal) {
+      btnDrawerGuide.addEventListener('click', () => {
+        closeDrawer();
+        systemGuideModal.classList.add('active');
+      });
+    }
+    if (btnCloseSystemGuide && systemGuideModal) {
+      btnCloseSystemGuide.addEventListener('click', () => {
+        systemGuideModal.classList.remove('active');
+      });
+    }
+    if (systemGuideModal) {
+      systemGuideModal.addEventListener('click', (e) => {
+        if (e.target === systemGuideModal) systemGuideModal.classList.remove('active');
+      });
+    }
     if (btnDrawerRestart) btnDrawerRestart.addEventListener('click', restartEngine);
     if (btnBannerRestart) btnBannerRestart.addEventListener('click', restartEngine);
 

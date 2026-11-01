@@ -276,6 +276,17 @@
               </div>
             </button>
 
+            <button id="btnDrawerGuide" class="drawer-action-btn">
+              <div class="drawer-action-info">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M12 16v-4"></path>
+                  <path d="M12 8h.01"></path>
+                </svg>
+                <span>راهنما و توضیحات سیستم</span>
+              </div>
+            </button>
+
             <button id="btnDrawerRestart" class="drawer-action-btn danger">
               <div class="drawer-action-info">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -577,6 +588,49 @@
               ذخیره تغییرات
             </button>
           </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 0.3: System Guide Modal -->
+    <div class="modal-backdrop" id="systemGuideModal">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-title">📘 راهنما و ساختار سیستم AntiMobile Pro</span>
+          </div>
+          <button id="btnCloseSystemGuide" class="icon-btn" title="بستن">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" style="padding: 18px; line-height: 1.7; font-size: 13.5px; color: #d1d5db;">
+          <h3 style="color: #a78bfa; margin-top: 0;">⚡ مشخصات کلیدی AntiMobile Pro</h3>
+          <p>کلاینت پیشرو PWA متصل به موتور هوشمند Antigravity با تم تاریک OLED، تفکر عمیق زنده و مدیریت پردازش‌ها.</p>
+
+          <h4 style="color: #67e8f9; margin-bottom: 6px;">🔐 امنیت و نشست‌های کاربری</h4>
+          <p>تمامی ارتباطات وب‌سوکت و APIها با توکن‌های امن رمزنگاری‌شده محافظت می‌شوند.<br>
+          • <b>نام کاربری پیش‌فرض:</b> <code>admin</code><br>
+          • <b>رمز عبور پیش‌فرض:</b> <code>antigravity</code><br>
+          برای تغییر رمز می‌توانید از دکمه <b>تغییر رمز عبور</b> در پایین منوی سایدبار استفاده نمایید.</p>
+
+          <h4 style="color: #67e8f9; margin-bottom: 6px;">⌨️ دستورات اسلش نوار ورودی</h4>
+          <p>با نوشتن <code>/</code> در کادر پیام، دستورات زیر در دسترس است:<br>
+          • <code>/goal</code> : اجرای عمیق تسک‌ها تا حصول نتیجه نهایی<br>
+          • <code>/plan</code> : برنامه‌ریزی گام‌به‌گام پیش از اجرا<br>
+          • <code>/boost</code> : تحلیل مسئله با چندین پرسپکتیو<br>
+          • <code>/model</code> : تغییر مدل هوش مصنوعی<br>
+          • <code>/restart</code> : راه‌اندازی مجدد موتور پردازش</p>
+
+          <h4 style="color: #67e8f9; margin-bottom: 6px;">📁 اسکریپت‌های مدیریت سرور</h4>
+          <p>
+          • <code>./start.sh</code> یا <code>antimobile</code> : اجرای سرور در پس‌زمینه<br>
+          • <code>./stop.sh</code> : توقف کامل سرور<br>
+          • <code>./push_to_github.sh</code> : ارسال امن و هوشمند به گیت‌هاب<br>
+          • فایل مستندات کامل: <code>SYSTEM_GUIDE.md</code> در ریشه پروژه
+          </p>
         </div>
       </div>
     </div>
