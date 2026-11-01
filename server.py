@@ -1235,11 +1235,22 @@ async def handle_slash_command(chat_id: str, text: str, ws_client: Optional[torn
 
 # Tornado HTTP Handlers
 class MainHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.set_header("Pragma", "no-cache")
+        self.set_header("Expires", "0")
+
     def get(self):
         self.render(os.path.join(WORKSPACE_DIR, 'index.html'))
 
     def head(self):
         self.get()
+
+class NoCacheStaticFileHandler(tornado.web.StaticFileHandler):
+    def set_extra_headers(self, path):
+        self.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.set_header("Pragma", "no-cache")
+        self.set_header("Expires", "0")
 
 # Base API Handler with session validation
 class BaseApiHandler(tornado.web.RequestHandler):
@@ -2469,11 +2480,11 @@ def make_app():
         # WebSocket
         (r"/ws", ChatWebSocket),
         
-        # Fixed Static Files
-        (r"/(manifest\.json)", tornado.web.StaticFileHandler, {"path": WORKSPACE_DIR}),
-        (r"/(sw\.js)", tornado.web.StaticFileHandler, {"path": WORKSPACE_DIR}),
-        (r"/css/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(WORKSPACE_DIR, "css")}),
-        (r"/js/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(WORKSPACE_DIR, "js")}),
+        # Fixed Static Files (No-Cache for instant live client updates)
+        (r"/(manifest\.json)", NoCacheStaticFileHandler, {"path": WORKSPACE_DIR}),
+        (r"/(sw\.js)", NoCacheStaticFileHandler, {"path": WORKSPACE_DIR}),
+        (r"/css/(.*)", NoCacheStaticFileHandler, {"path": os.path.join(WORKSPACE_DIR, "css")}),
+        (r"/js/(.*)", NoCacheStaticFileHandler, {"path": os.path.join(WORKSPACE_DIR, "js")}),
         (r"/fonts/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(WORKSPACE_DIR, "fonts")}),
         (r"/icons/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(WORKSPACE_DIR, "icons")}),
     ],

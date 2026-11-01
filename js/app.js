@@ -3209,11 +3209,12 @@
     }
   }
 
-  // Register PWA Service Worker
+  // Register PWA Service Worker & Force Update
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then((reg) => {
-        console.log('[PWA] ServiceWorker registered:', reg.scope);
+      navigator.serviceWorker.register('/sw.js?v=3.2').then((reg) => {
+        reg.update();
+        console.log('[PWA] ServiceWorker updated:', reg.scope);
       }).catch((err) => {
         console.warn('[PWA] ServiceWorker error:', err);
       });

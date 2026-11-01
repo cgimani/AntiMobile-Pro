@@ -18,8 +18,8 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/css/highlight.css">
-  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/highlight.css?v=3.2">
+  <link rel="stylesheet" href="/css/app.css?v=3.2">
 </head>
 <body>
   <div class="app-container">
@@ -661,8 +661,8 @@
       </div>
     </div>
 
-    <!-- Feature 0: Authentication / Login Modal -->
-    <div class="auth-modal-backdrop" id="authLoginModal">
+    <!-- Feature 0: Authentication / Login Modal (Disabled, Zero-Friction) -->
+    <div class="auth-modal-backdrop" id="authLoginModal" style="display: none !important; pointer-events: none !important;">
       <div class="auth-modal-dialog">
         <div class="auth-modal-header">
           <div class="auth-brand-icon">
@@ -814,8 +814,8 @@
   </div>
 
   <!-- Local Offline Scripts -->
-  <script src="/js/marked.min.js"></script>
-  <script src="/js/highlight.min.js"></script>
-  <script src="/js/app.js"></script>
+  <script src="/js/marked.min.js?v=3.2"></script>
+  <script src="/js/highlight.min.js?v=3.2"></script>
+  <script src="/js/app.js?v=3.2"></script>
 </body>
 </html>
