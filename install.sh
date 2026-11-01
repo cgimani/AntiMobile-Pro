@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ⚡ AntiMobile Pro - Universal Smart Installer & Updater
-# Supports: Android (Termux), macOS (Apple Silicon / Intel), Linux (Debian, Arch, Fedora), WSL
+# ⚡ AntiMobile Pro - Universal Smart Installer, Updater & Manager
+# Supports: Android (Termux), macOS (Apple Silicon / Intel), Linux, WSL
+# Version: 3.1.0 (Semantic Versioning)
 # ==============================================================================
 
 set -e
@@ -16,12 +17,18 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Default Configuration
+# Version definition
+APP_VERSION="3.1.0"
 REPO_URL="https://github.com/cgimani/AntiMobile-Pro.git"
 DEFAULT_INSTALL_DIR="$HOME/AntiMobile-Pro"
 APP_NAME="antimobile"
 SHORT_NAME="agy-web"
 PORT="7681"
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$DIR/VERSION" ]; then
+    APP_VERSION="$(cat "$DIR/VERSION" | tr -d '[:space:]')"
+fi
 
 # Banner
 print_banner() {
@@ -32,7 +39,7 @@ print_banner() {
     echo " ██╔══██║██║╚██╗██║   ██║   ██║██║╚██╔╝██║██║   ██║██╔══██╗██║██║     ██╔══╝  "
     echo " ██║  ██║██║ ╚████║   ██║   ██║██║ ╚═╝ ██║╚██████╔╝██████╔╝██║███████╗███████╗"
     echo " ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═════╝ ╚═╝╚══════╝╚══════╝"
-    echo -e "${CYAN}          ⚡ AntiMobile Pro - وب‌اپلیکیشن پیشرو هوشمند و کلاینت امن AGY ⚡${NC}"
+    echo -e "${CYAN}      ⚡ AntiMobile Pro (v${APP_VERSION}) - کلاینت هوشمند و رسمی Antigravity ⚡${NC}"
     echo ""
 }
 
@@ -117,7 +124,7 @@ install_dependencies() {
             ;;
     esac
 
-    # Ensure pip is ready and install Tornado
+    # Ensure pip and Tornado are ready
     echo -e "${BLUE}🐍 در حال بررسی کتابخانه‌های پایتون (Tornado)...${NC}"
     python3 -m pip install --upgrade pip >/dev/null 2>&1 || true
     if ! python3 -c "import tornado" >/dev/null 2>&1; then
@@ -159,7 +166,7 @@ check_google_auth() {
             return 0
         fi
     fi
-    echo -e "${YELLOW}ℹ️ اکانت گوگل هنوز متصل نشده است (در اولین اجرای agy یا از طریق پنل وب می‌توانید لاگین کنید).${NC}"
+    echo -e "${YELLOW}ℹ️ اکانت گوگل متصل نیست (در اولین اجرای agy یا از طریق پنل وب می‌توانید لاگین کنید).${NC}"
 }
 
 # 4. Resolve Installation Directory
@@ -167,58 +174,39 @@ resolve_dir() {
     if [ -f "./server.py" ] && [ -f "./index.html" ]; then
         TARGET_DIR="$(pwd)"
         IS_IN_PLACE=true
+    elif [ -d "$DEFAULT_INSTALL_DIR" ]; then
+        TARGET_DIR="$DEFAULT_INSTALL_DIR"
+        IS_IN_PLACE=false
     else
         TARGET_DIR="$DEFAULT_INSTALL_DIR"
         IS_IN_PLACE=false
     fi
 }
 
-# 5. Perform Install or Update
-install_or_update() {
+# Check if application is already installed
+is_installed() {
     resolve_dir
+    if [ -f "$TARGET_DIR/server.py" ] && [ -f "$TARGET_DIR/start.sh" ]; then
+        return 0
+    fi
+    if command -v "$APP_NAME" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
 
-    if [ "$IS_IN_PLACE" = true ]; then
-        echo -e "${CYAN}📂 در حال پیکربندی و به‌روزرسانی پروژه در مسیر فعلی: ${TARGET_DIR}${NC}"
-        if [ -d ".git" ]; then
-            echo -e "${BLUE}🔄 در حال دریافت آخرین تغییرات از مخزن گیت...${NC}"
-            if [ -f "chat_history.json" ]; then
-                cp "chat_history.json" "chat_history.json.bak" 2>/dev/null || true
-            fi
-            git pull --rebase 2>/dev/null || true
-            if [ -f "chat_history.json.bak" ] && [ ! -f "chat_history.json" ]; then
-                mv "chat_history.json.bak" "chat_history.json" 2>/dev/null || true
-            else
-                rm -f "chat_history.json.bak" 2>/dev/null || true
-            fi
-        fi
+# Get installed version
+get_installed_version() {
+    resolve_dir
+    if [ -f "$TARGET_DIR/VERSION" ]; then
+        cat "$TARGET_DIR/VERSION" | tr -d '[:space:]'
     else
-        if [ -d "$TARGET_DIR" ]; then
-            echo -e "${YELLOW}🔄 نسخه قبلی در ${TARGET_DIR} یافت شد. در حال به‌روزرسانی...${NC}"
-            cd "$TARGET_DIR"
-            if [ -f "chat_history.json" ]; then
-                cp "chat_history.json" "chat_history.json.bak" 2>/dev/null || true
-            fi
-            if [ -d ".git" ]; then
-                git fetch origin 2>/dev/null || true
-                git pull --rebase 2>/dev/null || true
-            fi
-            if [ -f "chat_history.json.bak" ]; then
-                mv "chat_history.json.bak" "chat_history.json" 2>/dev/null || true
-            fi
-        else
-            echo -e "${CYAN}📥 در حال دریافت فایل‌های پروژه از گیت‌هاب...${NC}"
-            git clone "$REPO_URL" "$TARGET_DIR"
-            cd "$TARGET_DIR"
-        fi
+        echo "نامشخص (نسخه قدیمی)"
     fi
+}
 
-    # Set executable permissions
-    chmod +x start.sh stop.sh agy-app push_to_github.sh 2>/dev/null || true
-    if [ -f "server.py" ]; then
-        chmod +x server.py
-    fi
-
-    # Create Global CLI Shortcuts
+# Create Global CLI Shortcuts
+create_shortcuts() {
     echo -e "${BLUE}🔗 در حال ایجاد دستورات میانبر در ترمینال (${BIN_DIR})...${NC}"
     
     cat <<EOF > "$BIN_DIR/$APP_NAME"
@@ -252,6 +240,165 @@ EOF
     echo -e "${GREEN}✅ میانبرهای دستوری '${APP_NAME}' و '${SHORT_NAME}' با موفقیت ساخته شدند.${NC}"
 }
 
+# 5. Perform Install or Update
+install_or_update() {
+    resolve_dir
+    detect_os
+    install_dependencies
+    check_agy_binary
+    check_google_auth
+
+    if [ "$IS_IN_PLACE" = true ]; then
+        echo -e "${CYAN}📂 در حال پیکربندی و به‌روزرسانی پروژه در مسیر فعلی: ${TARGET_DIR}${NC}"
+        if [ -d ".git" ]; then
+            echo -e "${BLUE}🔄 در حال دریافت آخرین تغییرات از مخزن گیت...${NC}"
+            if [ -f "chat_history.json" ]; then
+                cp "chat_history.json" "chat_history.json.bak" 2>/dev/null || true
+            fi
+            git pull --rebase origin main 2>/dev/null || git pull --rebase 2>/dev/null || true
+            if [ -f "chat_history.json.bak" ] && [ ! -f "chat_history.json" ]; then
+                mv "chat_history.json.bak" "chat_history.json" 2>/dev/null || true
+            else
+                rm -f "chat_history.json.bak" 2>/dev/null || true
+            fi
+        fi
+    else
+        if [ -d "$TARGET_DIR" ]; then
+            echo -e "${YELLOW}🔄 نسخه قبلی در ${TARGET_DIR} یافت شد. در حال به‌روزرسانی...${NC}"
+            cd "$TARGET_DIR"
+            if [ -f "chat_history.json" ]; then
+                cp "chat_history.json" "chat_history.json.bak" 2>/dev/null || true
+            fi
+            if [ -d ".git" ]; then
+                git fetch origin 2>/dev/null || true
+                git pull --rebase origin main 2>/dev/null || git pull --rebase 2>/dev/null || true
+            fi
+            if [ -f "chat_history.json.bak" ]; then
+                mv "chat_history.json.bak" "chat_history.json" 2>/dev/null || true
+            fi
+        else
+            echo -e "${CYAN}📥 در حال دریافت فایل‌های پروژه از گیت‌هاب...${NC}"
+            git clone "$REPO_URL" "$TARGET_DIR"
+            cd "$TARGET_DIR"
+        fi
+    fi
+
+    # Set executable permissions
+    chmod +x start.sh stop.sh push_to_github.sh 2>/dev/null || true
+    if [ -f "server.py" ]; then
+        chmod +x server.py
+    fi
+
+    create_shortcuts
+    print_summary
+}
+
+# Update only
+update_app() {
+    resolve_dir
+    echo -e "${CYAN}🔄 در حال به‌روزرسانی AntiMobile Pro در مسیر ${TARGET_DIR}...${NC}"
+    if [ ! -d "$TARGET_DIR" ]; then
+        echo -e "${RED}❌ پوشه برنامه یافت نشد! در حال نصب تمیز...${NC}"
+        install_or_update
+        return
+    fi
+
+    cd "$TARGET_DIR"
+    # Backup chat history
+    if [ -f "chat_history.json" ]; then
+        cp "chat_history.json" "chat_history.json.bak" 2>/dev/null || true
+    fi
+
+    # Pull latest changes
+    if [ -d ".git" ]; then
+        git fetch origin main 2>/dev/null || git fetch origin 2>/dev/null || true
+        git pull --rebase origin main 2>/dev/null || git pull 2>/dev/null || true
+    else
+        echo -e "${YELLOW}⚠️ مخزن گیت یافت نشد. دریافت مجدد...${NC}"
+        cd ..
+        rm -rf "$TARGET_DIR"
+        git clone "$REPO_URL" "$TARGET_DIR"
+        cd "$TARGET_DIR"
+    fi
+
+    # Restore chat history if needed
+    if [ -f "chat_history.json.bak" ] && [ ! -f "chat_history.json" ]; then
+        mv "chat_history.json.bak" "chat_history.json" 2>/dev/null || true
+    else
+        rm -f "chat_history.json.bak" 2>/dev/null || true
+    fi
+
+    chmod +x start.sh stop.sh push_to_github.sh server.py 2>/dev/null || true
+    create_shortcuts
+
+    # Re-check python dependencies
+    detect_os
+    if ! python3 -c "import tornado" >/dev/null 2>&1; then
+        python3 -m pip install "tornado>=6.2" --break-system-packages 2>/dev/null || python3 -m pip install "tornado>=6.2"
+    fi
+
+    NEW_VER=$(get_installed_version)
+    echo ""
+    echo -e "${GREEN}================================================================${NC}"
+    echo -e "${BOLD}  🎉 به‌روزرسانی با موفقیت به پایان رسید! (نسخه جدید: v${NEW_VER})${NC}"
+    echo -e "${GREEN}================================================================${NC}"
+    echo -e "  🚀 برای راه‌اندازی دستور ${CYAN}antimobile${NC} یا ${CYAN}./start.sh${NC} را اجرا کنید."
+    echo ""
+}
+
+# Uninstall application completely
+uninstall_app() {
+    resolve_dir
+    echo -e "${RED}================================================================${NC}"
+    echo -e "${BOLD}  🗑️ حذف کامل AntiMobile Pro از سیستم${NC}"
+    echo -e "${RED}================================================================${NC}"
+    echo -e "مسیر نصب: ${YELLOW}${TARGET_DIR}${NC}"
+    echo ""
+
+    if [ -t 0 ]; then
+        read -p "آیا از حذف کامل برنامه اطمینان دارید؟ (y/N) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${CYAN}عملیات حذف لغو شد.${NC}"
+            exit 0
+        fi
+    fi
+
+    # 1. Stop any running server process
+    echo -e "${YELLOW}🛑 در حال متوقف کردن پروسه‌های در حال اجرا...${NC}"
+    if [ -f "$TARGET_DIR/stop.sh" ]; then
+        bash "$TARGET_DIR/stop.sh" >/dev/null 2>&1 || true
+    fi
+    pkill -9 -f "python3.*server.py" 2>/dev/null || true
+
+    # 2. Ask to backup history
+    if [ -f "$TARGET_DIR/chat_history.json" ]; then
+        BACKUP_DIR="$HOME/antimobile_backup"
+        mkdir -p "$BACKUP_DIR"
+        cp "$TARGET_DIR/chat_history.json" "$BACKUP_DIR/chat_history_$(date +%Y%m%d_%H%M%S).json" 2>/dev/null || true
+        echo -e "${GREEN}💾 یک نسخه پشتیبان از گفتگوهای شما در ${BACKUP_DIR} ذخیره شد.${NC}"
+    fi
+
+    # 3. Remove shortcuts
+    detect_os
+    echo -e "${YELLOW}🗑️ در حال حذف میانبرهای ترمینال (${BIN_DIR})...${NC}"
+    rm -f "$BIN_DIR/$APP_NAME" "$BIN_DIR/$SHORT_NAME" 2>/dev/null || true
+
+    # 4. Remove installation directory
+    if [ "$IS_IN_PLACE" = false ] && [ -d "$TARGET_DIR" ]; then
+        echo -e "${YELLOW}🗑️ در حال حذف پوشه برنامه (${TARGET_DIR})...${NC}"
+        rm -rf "$TARGET_DIR"
+    else
+        echo -e "${YELLOW}ℹ️ چون در پوشه کاری فعلی هستید، تنها پروسه‌ها و میانبرها حذف شدند.${NC}"
+    fi
+
+    echo ""
+    echo -e "${GREEN}================================================================${NC}"
+    echo -e "${BOLD}  ✅ AntiMobile Pro با موفقیت از سیستم شما حذف گردید.${NC}"
+    echo -e "${GREEN}================================================================${NC}"
+    exit 0
+}
+
 # 6. Detect IP and Print Summary
 print_summary() {
     LOCAL_IP=""
@@ -267,7 +414,7 @@ print_summary() {
 
     echo ""
     echo -e "${GREEN}================================================================${NC}"
-    echo -e "${BOLD}  🎉 نصب و پیکربندی AntiMobile Pro با موفقیت تکمیل شد!${NC}"
+    echo -e "${BOLD}  🎉 نصب و پیکربندی AntiMobile Pro (v${APP_VERSION}) تکمیل شد!${NC}"
     echo -e "${GREEN}================================================================${NC}"
     echo -e "  📂 مسیر نصب پروژه:       ${BOLD}${TARGET_DIR}${NC}"
     echo -e "  🚀 روش راه‌اندازی سریع:   دستور ${BOLD}${CYAN}antimobile${NC} یا ${BOLD}${CYAN}agy-web${NC} یا ${BOLD}${CYAN}./start.sh${NC}"
@@ -282,20 +429,110 @@ print_summary() {
     echo ""
 }
 
-# Execution Flow
-print_banner
-detect_os
-install_dependencies
-check_agy_binary
-check_google_auth
-install_or_update
-print_summary
-
-# Ask user if they want to launch right away
-if [ -t 0 ]; then
-    read -p "آیا مایلید سرور همین حالا اجرا شود؟ (y/N) " -n 1 -r
+# Interactive Menu for Existing Installation
+show_existing_menu() {
+    INSTALLED_VER=$(get_installed_version)
+    echo -e "${CYAN}================================================================${NC}"
+    echo -e "${BOLD}  ⚡ برنامه AntiMobile Pro از قبل روی سیستم شما نصب است!${NC}"
+    echo -e "${CYAN}================================================================${NC}"
+    echo -e "  📌 نسخه نصب‌شده:  ${YELLOW}v${INSTALLED_VER}${NC}"
+    echo -e "  ✨ آخرین نسخه موجود: ${GREEN}v${APP_VERSION}${NC}"
+    echo -e "  📂 مسیر برنامه:     ${BOLD}${TARGET_DIR}${NC}"
+    echo -e "${CYAN}----------------------------------------------------------------${NC}"
+    echo -e "  لطفاً عملیات مورد نظر را انتخاب کنید:"
+    echo -e "  ${BOLD}[1]${NC} 🔄 ${GREEN}به‌روزرسانی به آخرین نسخه (Update)${NC}"
+    echo -e "  ${BOLD}[2]${NC} 🚀 ${CYAN}اجرای سرور و باز کردن برنامه (Start)${NC}"
+    echo -e "  ${BOLD}[3]${NC} 🛑 ${YELLOW}توقف سرور در حال اجرا (Stop)${NC}"
+    echo -e "  ${BOLD}[4]${NC} 🛠️ ${PURPLE}نصب مجدد و تعمیر فایل‌ها (Reinstall)${NC}"
+    echo -e "  ${BOLD}[5]${NC} 🗑️ ${RED}حذف کامل برنامه از سیستم (Uninstall)${NC}"
+    echo -e "  ${BOLD}[0]${NC} ❌ خروج (Exit)"
+    echo -e "${CYAN}================================================================${NC}"
     echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    read -p "شماره گزینه را وارد کنید [1-5]: " -r choice
+    echo ""
+
+    case "$choice" in
+        1)
+            update_app
+            ;;
+        2)
+            cd "$TARGET_DIR" && ./start.sh
+            ;;
+        3)
+            cd "$TARGET_DIR" && ./stop.sh
+            ;;
+        4)
+            install_or_update
+            ;;
+        5)
+            uninstall_app
+            ;;
+        0|*)
+            echo -e "${CYAN}خروج از اسکریپت.${NC}"
+            exit 0
+            ;;
+    esac
+}
+
+# Process CLI Arguments
+case "${1:-}" in
+    --update|-u)
+        print_banner
+        update_app
+        exit 0
+        ;;
+    --uninstall|--remove)
+        print_banner
+        uninstall_app
+        exit 0
+        ;;
+    --start|-s)
+        resolve_dir
         cd "$TARGET_DIR" && ./start.sh
+        exit 0
+        ;;
+    --stop)
+        resolve_dir
+        cd "$TARGET_DIR" && ./stop.sh
+        exit 0
+        ;;
+    --version|-v)
+        echo "AntiMobile Pro v${APP_VERSION}"
+        exit 0
+        ;;
+    --help|-h)
+        echo "AntiMobile Pro v${APP_VERSION} - Installer & Manager"
+        echo "Usage: ./install.sh [OPTION]"
+        echo ""
+        echo "Options:"
+        echo "  --update, -u       Update to latest version"
+        echo "  --uninstall        Uninstall and remove AntiMobile Pro"
+        echo "  --start, -s        Start the server"
+        echo "  --stop             Stop the running server"
+        echo "  --version, -v      Print current version"
+        echo "  --help, -h         Show this help message"
+        exit 0
+        ;;
+esac
+
+# Main Execution Flow
+print_banner
+
+if is_installed && [ -t 0 ]; then
+    show_existing_menu
+else
+    detect_os
+    install_dependencies
+    check_agy_binary
+    check_google_auth
+    install_or_update
+
+    # Ask user if they want to launch right away
+    if [ -t 0 ]; then
+        read -p "آیا مایلید سرور همین حالا اجرا شود؟ (y/N) " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            cd "$TARGET_DIR" && ./start.sh
+        fi
     fi
 fi

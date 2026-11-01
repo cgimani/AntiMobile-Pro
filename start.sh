@@ -48,8 +48,10 @@ if [ -z "$LOCAL_IP" ]; then
     LOCAL_IP="127.0.0.1"
 fi
 
+VERSION="$(cat "$DIR/VERSION" 2>/dev/null || echo "3.1.0")"
+
 echo -e "${GREEN}================================================================${NC}"
-echo -e "${BOLD}  🚀 سرور هوشمند AntiMobile Pro با موفقیت اجرا شد!${NC}"
+echo -e "${BOLD}  🚀 سرور هوشمند AntiMobile Pro (v${VERSION}) با موفقیت اجرا شد!${NC}"
 echo -e "${GREEN}================================================================${NC}"
 echo -e "  📱 آدرس محلی (Localhost):  ${CYAN}http://127.0.0.1:${PORT}${NC}"
 if [ "$LOCAL_IP" != "127.0.0.1" ]; then

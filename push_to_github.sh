@@ -67,9 +67,11 @@ if [ -z "$CURRENT_NAME" ] || [[ "$CURRENT_EMAIL" == *".local"* ]] || [[ "$CURREN
     git config user.email "cgimani@users.noreply.github.com"
 fi
 
-# Set remote origin
-git remote remove origin 2>/dev/null || true
-git remote add origin "$SSH_REPO"
+# Set remote origin (prefer HTTPS if configured or fallback to SSH)
+CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || true)
+if [ -z "$CURRENT_REMOTE" ]; then
+    git remote add origin "$HTTPS_REPO"
+fi
 
 # Stage all files
 git add -A
@@ -78,14 +80,25 @@ git add -A
 if git diff --staged --quiet; then
     echo -e "${YELLOW}ℹ️ تغییری برای ثبت کامیت جدید وجود ندارد.${NC}"
 else
-    COMMIT_MSG="${1:-feat: release AntiMobile Pro with secure authentication and smart installer}"
+    COMMIT_MSG="${1:-feat(v3.1.0): smart installer with update/uninstall support, semantic versioning, and live CLI streaming}"
     echo -e "${CYAN}💾 در حال ثبت کامیت با پیام: '${COMMIT_MSG}'${NC}"
     git commit -m "$COMMIT_MSG"
 fi
 
-# 3. Test GitHub Connectivity & Authentication
-echo -e "${BLUE}🔐 مرحله ۳: بررسی دسترسی و احراز هویت گیت‌هاب...${NC}"
+# 3. Test GitHub Push
+echo -e "${BLUE}🔐 مرحله ۳: ارسال تغییرات به گیت‌هاب (Push)...${NC}"
 
+# First attempt: Try pushing directly via current configured remote (HTTPS with Keychain or SSH)
+if git push origin main 2>/dev/null; then
+    echo ""
+    echo -e "${GREEN}================================================================${NC}"
+    echo -e "${BOLD}  🎉 پروژه AntiMobile Pro با موفقیت در گیت‌هاب بروزرسانی شد!${NC}"
+    echo -e "  🔗 لینک مخزن: ${CYAN}https://github.com/cgimani/AntiMobile-Pro${NC}"
+    echo -e "${GREEN}================================================================${NC}"
+    exit 0
+fi
+
+# If direct push failed, test SSH
 SSH_SUCCESS=false
 SSH_KEY_FILE="$HOME/.ssh/id_ed25519"
 

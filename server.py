@@ -25,6 +25,7 @@ import tornado.websocket
 import tornado.ioloop
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
+APP_VERSION = "3.1.0"
 PORT = int(os.environ.get('PORT', 7681))
 HOST = os.environ.get('HOST', '0.0.0.0')
 HISTORY_FILE = os.path.join(WORKSPACE_DIR, 'chat_history.json')
