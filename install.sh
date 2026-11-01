@@ -39,7 +39,7 @@ print_banner() {
     echo " ██╔══██║██║╚██╗██║   ██║   ██║██║╚██╔╝██║██║   ██║██╔══██╗██║██║     ██╔══╝  "
     echo " ██║  ██║██║ ╚████║   ██║   ██║██║ ╚═╝ ██║╚██████╔╝██████╔╝██║███████╗███████╗"
     echo " ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═════╝ ╚═╝╚══════╝╚══════╝"
-    echo -e "${CYAN}      ⚡ AntiMobile Pro (v${APP_VERSION}) - کلاینت هوشمند و رسمی Antigravity ⚡${NC}"
+    echo -e "${CYAN}      ⚡ AntiMobile Pro (v${APP_VERSION}) - Smart Client for Google Antigravity ⚡${NC}"
     echo ""
 }
 
@@ -77,35 +77,35 @@ detect_os() {
 
 # 2. Check and Install Dependencies
 install_dependencies() {
-    echo -e "${BLUE}🔍 در حال بررسی پیش‌نیازهای سیستمی...${NC}"
+    echo -e "${BLUE}🔍 Checking system prerequisites...${NC}"
 
     case "$OS_TYPE" in
         termux)
-            echo -e "${GREEN}📱 محیط شناسایی‌شده: Android Termux${NC}"
+            echo -e "${GREEN}📱 Detected environment: Android Termux${NC}"
             pkg update -y >/dev/null 2>&1 || true
             for pkg in python git curl; do
                 if ! command -v $pkg >/dev/null 2>&1; then
-                    echo -e "${YELLOW}📦 در حال نصب $pkg...${NC}"
+                    echo -e "${YELLOW}📦 Installing $pkg...${NC}"
                     pkg install -y $pkg
                 fi
             done
             ;;
         macos)
-            echo -e "${GREEN}🍏 محیط شناسایی‌شده: macOS ($(uname -m))${NC}"
+            echo -e "${GREEN}🍏 Detected environment: macOS ($(uname -m))${NC}"
             if ! command -v python3 >/dev/null 2>&1; then
                 if command -v brew >/dev/null 2>&1; then
-                    echo -e "${YELLOW}📦 در حال نصب python3 با Homebrew...${NC}"
+                    echo -e "${YELLOW}📦 Installing python3 via Homebrew...${NC}"
                     brew install python
                 else
-                    echo -e "${RED}❌ لطفاً پایتون ۳ را نصب کنید (https://python.org)${NC}"
+                    echo -e "${RED}❌ Please install Python 3 (https://python.org)${NC}"
                     exit 1
                 fi
             fi
             ;;
         linux)
-            echo -e "${GREEN}🐧 محیط شناسایی‌شده: Linux (${PKG_MGR})${NC}"
+            echo -e "${GREEN}🐧 Detected environment: Linux (${PKG_MGR})${NC}"
             if ! command -v python3 >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
-                echo -e "${YELLOW}📦 در حال نصب ابزارهای پایه با دسترسی sudo...${NC}"
+                echo -e "${YELLOW}📦 Installing base tools using sudo...${NC}"
                 case "$PKG_MGR" in
                     apt)
                         sudo apt-get update && sudo apt-get install -y python3 python3-pip git curl
@@ -125,18 +125,18 @@ install_dependencies() {
     esac
 
     # Ensure pip and Tornado are ready
-    echo -e "${BLUE}🐍 در حال بررسی کتابخانه‌های پایتون (Tornado)...${NC}"
+    echo -e "${BLUE}🐍 Checking Python dependencies (Tornado)...${NC}"
     python3 -m pip install --upgrade pip >/dev/null 2>&1 || true
     if ! python3 -c "import tornado" >/dev/null 2>&1; then
-        echo -e "${YELLOW}📦 در حال نصب کتابخانه Tornado...${NC}"
+        echo -e "${YELLOW}📦 Installing Tornado library...${NC}"
         python3 -m pip install "tornado>=6.2" --break-system-packages 2>/dev/null || python3 -m pip install "tornado>=6.2"
     fi
-    echo -e "${GREEN}✅ پیش‌نیازهای پایتون آماده است.${NC}"
+    echo -e "${GREEN}✅ Python dependencies are ready.${NC}"
 }
 
 # 3. Check for Antigravity Binary
 check_agy_binary() {
-    echo -e "${BLUE}🧠 در حال بررسی موتور اصلی Antigravity CLI (agy)...${NC}"
+    echo -e "${BLUE}🧠 Checking Antigravity CLI binary (agy)...${NC}"
     AGY_PATH=""
     if command -v agy >/dev/null 2>&1; then
         AGY_PATH=$(command -v agy)
@@ -147,26 +147,26 @@ check_agy_binary() {
     fi
 
     if [ -n "$AGY_PATH" ]; then
-        echo -e "${GREEN}✅ موتور هوش مصنوعی با موفقیت یافت شد: ${AGY_PATH}${NC}"
+        echo -e "${GREEN}✅ Antigravity engine found: ${AGY_PATH}${NC}"
     else
-        echo -e "${YELLOW}⚠️ توجه: باینری 'agy' در مسیرهای استاندارد سیستم یافت نشد.${NC}"
-        echo -e "${CYAN}💡 پس از اتمام نصب، برای فعال‌سازی کامل باینری رسمی دستور زیر را در ترموکس بزنید:${NC}"
+        echo -e "${YELLOW}⚠️ Notice: 'agy' binary was not found in standard system PATH.${NC}"
+        echo -e "${CYAN}💡 After installation, you can install the official agy binary using:${NC}"
         echo -e "   curl -sL https://antigravity.google/install.sh | bash"
     fi
 }
 
 # 3.2. Check Google Antigravity OAuth Account
 check_google_auth() {
-    echo -e "${BLUE}🔐 در حال بررسی وضعیت اتصال اکانت گوگل Antigravity...${NC}"
+    echo -e "${BLUE}🔐 Checking Google Antigravity account status...${NC}"
     TOKEN_FILE="$HOME/.gemini/jetski-standalone-oauth-token"
     if [ -f "$TOKEN_FILE" ]; then
         EMAIL=$(python3 -c "import json; print(json.load(open('$TOKEN_FILE')).get('id_token_email',''))" 2>/dev/null || true)
         if [ -n "$EMAIL" ]; then
-            echo -e "${GREEN}✅ اکانت گوگل با موفقیت متصل است: ${BOLD}${EMAIL}${NC}"
+            echo -e "${GREEN}✅ Connected Google account: ${BOLD}${EMAIL}${NC}"
             return 0
         fi
     fi
-    echo -e "${YELLOW}ℹ️ اکانت گوگل متصل نیست (در اولین اجرای agy یا از طریق پنل وب می‌توانید لاگین کنید).${NC}"
+    echo -e "${YELLOW}ℹ️ Google account not connected yet (connect via 'agy' or web app).${NC}"
 }
 
 # 4. Resolve Installation Directory
@@ -201,13 +201,13 @@ get_installed_version() {
     if [ -f "$TARGET_DIR/VERSION" ]; then
         cat "$TARGET_DIR/VERSION" | tr -d '[:space:]'
     else
-        echo "نامشخص (نسخه قدیمی)"
+        echo "Unknown (Legacy version)"
     fi
 }
 
 # Create Global CLI Shortcuts
 create_shortcuts() {
-    echo -e "${BLUE}🔗 در حال ایجاد دستورات میانبر در ترمینال (${BIN_DIR})...${NC}"
+    echo -e "${BLUE}🔗 Creating terminal shortcuts in (${BIN_DIR})...${NC}"
     
     cat <<EOF > "$BIN_DIR/$APP_NAME"
 #!/usr/bin/env bash
@@ -237,7 +237,7 @@ EOF
         fi
     fi
 
-    echo -e "${GREEN}✅ میانبرهای دستوری '${APP_NAME}' و '${SHORT_NAME}' با موفقیت ساخته شدند.${NC}"
+    echo -e "${GREEN}✅ CLI shortcuts '${APP_NAME}' and '${SHORT_NAME}' created successfully.${NC}"
 }
 
 # 5. Perform Install or Update
@@ -249,9 +249,9 @@ install_or_update() {
     check_google_auth
 
     if [ "$IS_IN_PLACE" = true ]; then
-        echo -e "${CYAN}📂 در حال پیکربندی و به‌روزرسانی پروژه در مسیر فعلی: ${TARGET_DIR}${NC}"
+        echo -e "${CYAN}📂 Configuring project in current directory: ${TARGET_DIR}${NC}"
         if [ -d ".git" ]; then
-            echo -e "${BLUE}🔄 در حال دریافت آخرین تغییرات از مخزن گیت...${NC}"
+            echo -e "${BLUE}🔄 Pulling latest changes from Git repository...${NC}"
             if [ -f "chat_history.json" ]; then
                 cp "chat_history.json" "chat_history.json.bak" 2>/dev/null || true
             fi
@@ -264,7 +264,7 @@ install_or_update() {
         fi
     else
         if [ -d "$TARGET_DIR" ]; then
-            echo -e "${YELLOW}🔄 نسخه قبلی در ${TARGET_DIR} یافت شد. در حال به‌روزرسانی...${NC}"
+            echo -e "${YELLOW}🔄 Existing installation found at ${TARGET_DIR}. Updating...${NC}"
             cd "$TARGET_DIR"
             if [ -f "chat_history.json" ]; then
                 cp "chat_history.json" "chat_history.json.bak" 2>/dev/null || true
@@ -277,7 +277,7 @@ install_or_update() {
                 mv "chat_history.json.bak" "chat_history.json" 2>/dev/null || true
             fi
         else
-            echo -e "${CYAN}📥 در حال دریافت فایل‌های پروژه از گیت‌هاب...${NC}"
+            echo -e "${CYAN}📥 Cloning project files from GitHub...${NC}"
             git clone "$REPO_URL" "$TARGET_DIR"
             cd "$TARGET_DIR"
         fi
@@ -296,9 +296,9 @@ install_or_update() {
 # Update only
 update_app() {
     resolve_dir
-    echo -e "${CYAN}🔄 در حال به‌روزرسانی AntiMobile Pro در مسیر ${TARGET_DIR}...${NC}"
+    echo -e "${CYAN}🔄 Updating AntiMobile Pro in ${TARGET_DIR}...${NC}"
     if [ ! -d "$TARGET_DIR" ]; then
-        echo -e "${RED}❌ پوشه برنامه یافت نشد! در حال نصب تمیز...${NC}"
+        echo -e "${RED}❌ Application directory not found! Performing clean install...${NC}"
         install_or_update
         return
     fi
@@ -314,7 +314,7 @@ update_app() {
         git fetch origin main 2>/dev/null || git fetch origin 2>/dev/null || true
         git pull --rebase origin main 2>/dev/null || git pull 2>/dev/null || true
     else
-        echo -e "${YELLOW}⚠️ مخزن گیت یافت نشد. دریافت مجدد...${NC}"
+        echo -e "${YELLOW}⚠️ Git repository not found. Re-cloning...${NC}"
         cd ..
         rm -rf "$TARGET_DIR"
         git clone "$REPO_URL" "$TARGET_DIR"
@@ -340,9 +340,9 @@ update_app() {
     NEW_VER=$(get_installed_version)
     echo ""
     echo -e "${GREEN}================================================================${NC}"
-    echo -e "${BOLD}  🎉 به‌روزرسانی با موفقیت به پایان رسید! (نسخه جدید: v${NEW_VER})${NC}"
+    echo -e "${BOLD}  🎉 Update completed successfully! (New version: v${NEW_VER})${NC}"
     echo -e "${GREEN}================================================================${NC}"
-    echo -e "  🚀 برای راه‌اندازی دستور ${CYAN}antimobile${NC} یا ${CYAN}./start.sh${NC} را اجرا کنید."
+    echo -e "  🚀 Run ${CYAN}antimobile${NC} or ${CYAN}./start.sh${NC} to start."
     echo ""
 }
 
@@ -350,22 +350,22 @@ update_app() {
 uninstall_app() {
     resolve_dir
     echo -e "${RED}================================================================${NC}"
-    echo -e "${BOLD}  🗑️ حذف کامل AntiMobile Pro از سیستم${NC}"
+    echo -e "${BOLD}  🗑️ Uninstall AntiMobile Pro${NC}"
     echo -e "${RED}================================================================${NC}"
-    echo -e "مسیر نصب: ${YELLOW}${TARGET_DIR}${NC}"
+    echo -e "Install path: ${YELLOW}${TARGET_DIR}${NC}"
     echo ""
 
     if [ -t 0 ]; then
-        read -p "آیا از حذف کامل برنامه اطمینان دارید؟ (y/N) " -n 1 -r
+        read -p "Are you sure you want to completely uninstall AntiMobile Pro? (y/N) " -n 1 -r
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${CYAN}عملیات حذف لغو شد.${NC}"
+            echo -e "${CYAN}Uninstallation cancelled.${NC}"
             exit 0
         fi
     fi
 
     # 1. Stop any running server process
-    echo -e "${YELLOW}🛑 در حال متوقف کردن پروسه‌های در حال اجرا...${NC}"
+    echo -e "${YELLOW}🛑 Stopping running server processes...${NC}"
     if [ -f "$TARGET_DIR/stop.sh" ]; then
         bash "$TARGET_DIR/stop.sh" >/dev/null 2>&1 || true
     fi
@@ -376,25 +376,25 @@ uninstall_app() {
         BACKUP_DIR="$HOME/antimobile_backup"
         mkdir -p "$BACKUP_DIR"
         cp "$TARGET_DIR/chat_history.json" "$BACKUP_DIR/chat_history_$(date +%Y%m%d_%H%M%S).json" 2>/dev/null || true
-        echo -e "${GREEN}💾 یک نسخه پشتیبان از گفتگوهای شما در ${BACKUP_DIR} ذخیره شد.${NC}"
+        echo -e "${GREEN}💾 Backup of your chat history saved to ${BACKUP_DIR}.${NC}"
     fi
 
     # 3. Remove shortcuts
     detect_os
-    echo -e "${YELLOW}🗑️ در حال حذف میانبرهای ترمینال (${BIN_DIR})...${NC}"
+    echo -e "${YELLOW}🗑️ Removing terminal shortcuts (${BIN_DIR})...${NC}"
     rm -f "$BIN_DIR/$APP_NAME" "$BIN_DIR/$SHORT_NAME" 2>/dev/null || true
 
     # 4. Remove installation directory
     if [ "$IS_IN_PLACE" = false ] && [ -d "$TARGET_DIR" ]; then
-        echo -e "${YELLOW}🗑️ در حال حذف پوشه برنامه (${TARGET_DIR})...${NC}"
+        echo -e "${YELLOW}🗑️ Removing application directory (${TARGET_DIR})...${NC}"
         rm -rf "$TARGET_DIR"
     else
-        echo -e "${YELLOW}ℹ️ چون در پوشه کاری فعلی هستید، تنها پروسه‌ها و میانبرها حذف شدند.${NC}"
+        echo -e "${YELLOW}ℹ️ In-place workspace detected. Only processes and shortcuts were removed.${NC}"
     fi
 
     echo ""
     echo -e "${GREEN}================================================================${NC}"
-    echo -e "${BOLD}  ✅ AntiMobile Pro با موفقیت از سیستم شما حذف گردید.${NC}"
+    echo -e "${BOLD}  ✅ AntiMobile Pro has been completely uninstalled.${NC}"
     echo -e "${GREEN}================================================================${NC}"
     exit 0
 }
@@ -414,17 +414,17 @@ print_summary() {
 
     echo ""
     echo -e "${GREEN}================================================================${NC}"
-    echo -e "${BOLD}  🎉 نصب و پیکربندی AntiMobile Pro (v${APP_VERSION}) تکمیل شد!${NC}"
+    echo -e "${BOLD}  🎉 AntiMobile Pro (v${APP_VERSION}) setup complete!${NC}"
     echo -e "${GREEN}================================================================${NC}"
-    echo -e "  📂 مسیر نصب پروژه:       ${BOLD}${TARGET_DIR}${NC}"
-    echo -e "  🚀 روش راه‌اندازی سریع:   دستور ${BOLD}${CYAN}antimobile${NC} یا ${BOLD}${CYAN}agy-web${NC} یا ${BOLD}${CYAN}./start.sh${NC}"
-    echo -e "  🛑 روش توقف سرور:         دستور ${BOLD}${CYAN}./stop.sh${NC}"
+    echo -e "  📂 Install path:       ${BOLD}${TARGET_DIR}${NC}"
+    echo -e "  🚀 Quick start:        Run ${BOLD}${CYAN}antimobile${NC} or ${BOLD}${CYAN}agy-web${NC} or ${BOLD}${CYAN}./start.sh${NC}"
+    echo -e "  🛑 Stop server:        Run ${BOLD}${CYAN}./stop.sh${NC}"
     echo -e "  --------------------------------------------------------------"
-    echo -e "  📱 آدرس دسترسی محلی:     ${BOLD}${CYAN}http://localhost:${PORT}${NC}"
+    echo -e "  📱 Local URL:          ${BOLD}${CYAN}http://localhost:${PORT}${NC}"
     if [ "$LOCAL_IP" != "127.0.0.1" ]; then
-    echo -e "  🌐 آدرس در شبکه وای‌فای:  ${BOLD}${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
+    echo -e "  🌐 Network (Wi-Fi):    ${BOLD}${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
     fi
-    echo -e "  ⚡ بدون نیاز به پسورد:    ${GREEN}ورود مستقیم و آنی به محیط کار${NC}"
+    echo -e "  ⚡ Zero password:      ${GREEN}Instant access to workspace${NC}"
     echo -e "${GREEN}================================================================${NC}"
     echo ""
 }
@@ -433,22 +433,22 @@ print_summary() {
 show_existing_menu() {
     INSTALLED_VER=$(get_installed_version)
     echo -e "${CYAN}================================================================${NC}"
-    echo -e "${BOLD}  ⚡ برنامه AntiMobile Pro از قبل روی سیستم شما نصب است!${NC}"
+    echo -e "${BOLD}  ⚡ AntiMobile Pro is already installed!${NC}"
     echo -e "${CYAN}================================================================${NC}"
-    echo -e "  📌 نسخه نصب‌شده:  ${YELLOW}v${INSTALLED_VER}${NC}"
-    echo -e "  ✨ آخرین نسخه موجود: ${GREEN}v${APP_VERSION}${NC}"
-    echo -e "  📂 مسیر برنامه:     ${BOLD}${TARGET_DIR}${NC}"
+    echo -e "  📌 Installed version: ${YELLOW}v${INSTALLED_VER}${NC}"
+    echo -e "  ✨ Latest version:    ${GREEN}v${APP_VERSION}${NC}"
+    echo -e "  📂 Install directory: ${BOLD}${TARGET_DIR}${NC}"
     echo -e "${CYAN}----------------------------------------------------------------${NC}"
-    echo -e "  لطفاً عملیات مورد نظر را انتخاب کنید:"
-    echo -e "  ${BOLD}[1]${NC} 🔄 ${GREEN}به‌روزرسانی به آخرین نسخه (Update)${NC}"
-    echo -e "  ${BOLD}[2]${NC} 🚀 ${CYAN}اجرای سرور و باز کردن برنامه (Start)${NC}"
-    echo -e "  ${BOLD}[3]${NC} 🛑 ${YELLOW}توقف سرور در حال اجرا (Stop)${NC}"
-    echo -e "  ${BOLD}[4]${NC} 🛠️ ${PURPLE}نصب مجدد و تعمیر فایل‌ها (Reinstall)${NC}"
-    echo -e "  ${BOLD}[5]${NC} 🗑️ ${RED}حذف کامل برنامه از سیستم (Uninstall)${NC}"
-    echo -e "  ${BOLD}[0]${NC} ❌ خروج (Exit)"
+    echo -e "  Please choose an action:"
+    echo -e "  ${BOLD}[1]${NC} 🔄 ${GREEN}Update to latest version (Update)${NC}"
+    echo -e "  ${BOLD}[2]${NC} 🚀 ${CYAN}Start server & open app (Start)${NC}"
+    echo -e "  ${BOLD}[3]${NC} 🛑 ${YELLOW}Stop running server (Stop)${NC}"
+    echo -e "  ${BOLD}[4]${NC} 🛠️ ${PURPLE}Reinstall & repair files (Reinstall)${NC}"
+    echo -e "  ${BOLD}[5]${NC} 🗑️ ${RED}Uninstall completely (Uninstall)${NC}"
+    echo -e "  ${BOLD}[0]${NC} ❌ Exit"
     echo -e "${CYAN}================================================================${NC}"
     echo ""
-    read -p "شماره گزینه را وارد کنید [1-5]: " -r choice
+    read -p "Enter choice [1-5]: " -r choice
     echo ""
 
     case "$choice" in
@@ -468,7 +468,7 @@ show_existing_menu() {
             uninstall_app
             ;;
         0|*)
-            echo -e "${CYAN}خروج از اسکریپت.${NC}"
+            echo -e "${CYAN}Exiting installer.${NC}"
             exit 0
             ;;
     esac
@@ -529,7 +529,7 @@ else
 
     # Ask user if they want to launch right away
     if [ -t 0 ]; then
-        read -p "آیا مایلید سرور همین حالا اجرا شود؟ (y/N) " -n 1 -r
+        read -p "Would you like to start the server now? (y/N) " -n 1 -r
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             cd "$TARGET_DIR" && ./start.sh

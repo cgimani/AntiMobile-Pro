@@ -31,7 +31,7 @@ sleep 1.2
 
 # Verify server started
 if ! ps -p $SERVER_PID > /dev/null 2>&1; then
-    echo "❌ خطا در راه‌اندازی سرور! لاگ سرور را بررسی کنید:"
+    echo "❌ Failed to start server! Checking server log:"
     cat "$DIR/server.log" 2>/dev/null | tail -n 15
     exit 1
 fi
@@ -51,16 +51,16 @@ fi
 VERSION="$(cat "$DIR/VERSION" 2>/dev/null || echo "3.1.0")"
 
 echo -e "${GREEN}================================================================${NC}"
-echo -e "${BOLD}  🚀 سرور هوشمند AntiMobile Pro (v${VERSION}) با موفقیت اجرا شد!${NC}"
+echo -e "${BOLD}  🚀 AntiMobile Pro (v${VERSION}) server started successfully!${NC}"
 echo -e "${GREEN}================================================================${NC}"
-echo -e "  📱 آدرس محلی (Localhost):  ${CYAN}http://127.0.0.1:${PORT}${NC}"
+echo -e "  📱 Local URL (Localhost):  ${CYAN}http://127.0.0.1:${PORT}${NC}"
 if [ "$LOCAL_IP" != "127.0.0.1" ]; then
-echo -e "  🌐 آدرس شبکه (Wi-Fi):       ${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
+echo -e "  🌐 Network URL (Wi-Fi):    ${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
 fi
-echo -e "  ⚡ بدون نیاز به پسورد:      ${GREEN}ورود مستقیم و پرسرعت${NC}"
-echo -e "  ⚙️ شناسه پروسه (PID):       ${SERVER_PID}"
+echo -e "  ⚡ Access mode:             ${GREEN}Instant workspace (No password required)${NC}"
+echo -e "  ⚙️ Process ID (PID):        ${SERVER_PID}"
 echo -e "${GREEN}----------------------------------------------------------------${NC}"
-echo -e "  برای توقف سرور دستور زیر را اجرا کنید: ${YELLOW}./stop.sh${NC}"
+echo -e "  To stop the server run: ${YELLOW}./stop.sh${NC}"
 echo -e "${GREEN}================================================================${NC}"
 
 # Auto-open in default browser
