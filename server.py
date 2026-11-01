@@ -898,6 +898,13 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
                         finally:
                             permission_futures.pop(req_id, None)
 
+                    # Always stream non-empty stderr lines to live CLI view
+                    send_ws({
+                        "type": "cli_output",
+                        "line": err_line,
+                        "is_err": True
+                    })
+
                     # If a command tool is actively running, stream stderr line
                     active_info = active_tool_info.get(chat_id)
                     if active_info and active_info.get("is_command"):
@@ -925,7 +932,12 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
 
             # Non-JSON lines (raw CLI prints or commands)
             if not line_str.startswith('{'):
-                # Stream to active command preview if open
+                # Stream directly to live CLI chat block
+                send_ws({
+                    "type": "cli_output",
+                    "line": line_str,
+                    "is_err": False
+                })
                 active_info = active_tool_info.get(chat_id)
                 if active_info and active_info.get("is_command"):
                     send_ws({
@@ -1032,6 +1044,13 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
                             "is_command": is_command,
                             "start_time": time.time()
                         })
+                        cmd_display = params.get("CommandLine") or params.get("command") or params.get("Path") or ""
+                        cli_log_line = f"$ [{tool_name}] {cmd_display}" if cmd_display else f"$ [{tool_name}]"
+                        send_ws({
+                            "type": "cli_output",
+                            "line": cli_log_line,
+                            "is_err": False
+                        })
                         send_ws({
                             "type": "status",
                             "status": f"{icon} {title}..."
@@ -1040,6 +1059,13 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
                     elif state == "DONE":
                         active_tool_info.pop(chat_id, None)
                         output_str = tool_info.get("output", "")
+                        if output_str:
+                            for out_line in output_str.strip().splitlines()[:12]:
+                                send_ws({
+                                    "type": "cli_output",
+                                    "line": out_line,
+                                    "is_err": False
+                                })
                         if step_index in turn_steps:
                             turn_steps[step_index]["state"] = "DONE"
                             turn_steps[step_index]["duration"] = round(duration, 2)

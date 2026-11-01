@@ -44,6 +44,9 @@
   // File Explorer State
   let currentFilesPath = '';
 
+  // Real-Time CLI Stream Element
+  let activeLiveCliEl = null;
+
   // DOM Elements
   const authLoginModal = document.getElementById('authLoginModal');
   const authLoginForm = document.getElementById('authLoginForm');
@@ -395,29 +398,13 @@
     return res;
   }
 
-  // Feature 0: Authentication UI Handlers
+  // Feature 0: Authentication UI Handlers (Disabled)
   function showLoginModal(errorMsg = '') {
-    if (!authLoginModal) return;
-    authLoginModal.classList.add('active');
-    if (errorMsg) {
-      if (authAlertBanner) {
-        authAlertBanner.textContent = errorMsg;
-        authAlertBanner.className = 'auth-alert';
-        authAlertBanner.style.display = 'block';
-      }
-    } else if (authAlertBanner) {
-      authAlertBanner.style.display = 'none';
-    }
-    if (authPassword) {
-      authPassword.value = '';
-      setTimeout(() => authPassword.focus(), 150);
-    }
+    return;
   }
 
   function hideLoginModal() {
-    if (!authLoginModal) return;
-    authLoginModal.classList.remove('active');
-    if (authAlertBanner) authAlertBanner.style.display = 'none';
+    return;
   }
 
   function updateUserInfoUI(username) {
@@ -2256,9 +2243,27 @@
         activeStreamingBubble.innerHTML += '<br><em style="color:#ef4444;font-size:11px;">[عملیات متوقف گردید]</em>';
       }
       activeStreamingBubble = null;
+      activeLiveCliEl = null;
       currentStreamText = '';
       currentAccordionEl = null;
       liveThinkingEl = null;
+    } else if (type === 'cli_output') {
+      if (thinkingRow) thinkingRow.classList.remove('active');
+      if (activeLiveCliEl && data.line) {
+        const lineEl = document.createElement('div');
+        const text = data.line;
+        if (text.startsWith('$') || text.startsWith('>')) {
+          lineEl.className = 'cli-cmd';
+        } else if (data.is_err) {
+          lineEl.className = 'cli-err';
+        } else {
+          lineEl.className = 'cli-out';
+        }
+        lineEl.textContent = text;
+        activeLiveCliEl.appendChild(lineEl);
+        activeLiveCliEl.scrollTop = activeLiveCliEl.scrollHeight;
+        scrollToBottom();
+      }
     } else if (type === 'step_start') {
       handleStepStart(data);
     } else if (type === 'command_output') {
@@ -2338,6 +2343,7 @@
       }
 
       activeStreamingBubble = null;
+      activeLiveCliEl = null;
       currentStreamText = '';
       currentAccordionEl = null;
       liveThinkingEl = null;
@@ -2354,6 +2360,7 @@
       }
       appendMessageBubble('assistant', `⚠️ **خطا:**\n${data.error}`, Date.now() / 1000, true, true);
       activeStreamingBubble = null;
+      activeLiveCliEl = null;
       currentStreamText = '';
       currentAccordionEl = null;
       liveThinkingEl = null;
@@ -2462,6 +2469,12 @@
       const badge = liveThinkingEl.querySelector('.thinking-badge');
       if (badge) badge.textContent = `${elapsed}s`;
     }, 200);
+
+    // Live CLI Output Box (Real-time direct terminal stream)
+    const cliEl = document.createElement('div');
+    cliEl.className = 'live-cli-stream';
+    row.appendChild(cliEl);
+    activeLiveCliEl = cliEl;
 
     // Live Assistant Bubble
     const bubble = document.createElement('div');
