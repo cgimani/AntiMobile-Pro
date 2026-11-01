@@ -55,7 +55,7 @@ echo -e "  📱 آدرس محلی (Localhost):  ${CYAN}http://127.0.0.1:${PORT}$
 if [ "$LOCAL_IP" != "127.0.0.1" ]; then
 echo -e "  🌐 آدرس شبکه (Wi-Fi):       ${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
 fi
-echo -e "  🔐 احراز هویت (Login):      ${BOLD}نام‌کاربری:${NC} admin | ${BOLD}رمز عبور:${NC} antigravity"
+echo -e "  ⚡ بدون نیاز به پسورد:      ${GREEN}ورود مستقیم و پرسرعت${NC}"
 echo -e "  ⚙️ شناسه پروسه (PID):       ${SERVER_PID}"
 echo -e "${GREEN}----------------------------------------------------------------${NC}"
 echo -e "  برای توقف سرور دستور زیر را اجرا کنید: ${YELLOW}./stop.sh${NC}"

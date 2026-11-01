@@ -93,6 +93,10 @@
         <span class="pill-icon">⚡</span>
         <span class="pill-text" id="pillModeText">خودکار</span>
       </button>
+      <button class="quick-pill" id="pillQuota" title="سهمیه و کریدیت مدل‌های Antigravity">
+        <span class="pill-icon">📊</span>
+        <span class="pill-text" id="pillQuotaText">سهمیه مدل‌ها</span>
+      </button>
       <div class="pill-ping" id="pillPing" title="تاخیر اتصال به سرور">
         <span class="ping-dot" id="pingDot"></span>
         <span class="ping-val" id="pingValText">-- ms</span>
@@ -185,6 +189,14 @@
             </svg>
           </button>
 
+          <!-- Attach File / Image Button -->
+          <button id="btnAttachFile" class="icon-btn" style="width: 28px; height: 28px;" title="پیوست فایل یا تصویر" aria-label="Attach File">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+            </svg>
+          </button>
+          <input type="file" id="fileAttachmentInput" style="display: none;" multiple>
+
           <!-- Text Input Area -->
           <textarea 
             id="inputMessage" 
@@ -230,23 +242,22 @@
         </div>
 
         <div class="drawer-content">
-          <!-- User Profile & Auth Card in Drawer -->
+          <!-- Antigravity Google Account Card in Drawer -->
           <div class="drawer-user-card" id="drawerUserCard">
             <div class="user-avatar-wrap">
-              <div class="user-avatar-badge" id="drawerUserAvatar">A</div>
+              <div class="user-avatar-badge google-badge" id="drawerUserAvatar">G</div>
               <div class="user-status-indicator online"></div>
             </div>
-            <div class="user-meta-info">
-              <span class="user-name" id="drawerUserName">admin</span>
-              <span class="user-role">AntiMobile Pro</span>
+            <div class="user-meta-info" id="btnDrawerOpenQuota" style="cursor: pointer;">
+              <span class="user-name" id="drawerUserName">mr.x.level.3@gmail.com</span>
+              <span class="user-role" id="drawerAccountTier">Google Antigravity</span>
             </div>
-            <button id="btnDrawerLogout" class="drawer-logout-btn" title="خروج از حساب">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                <polyline points="16 17 21 12 16 7"></polyline>
-                <line x1="21" y1="12" x2="9" y2="12"></line>
+            <button id="btnDrawerQuota" class="drawer-quota-btn" title="مشاهده سهمیه و اعتبارات مدل‌ها">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+                <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
               </svg>
-              <span>خروج</span>
+              <span>سهمیه</span>
             </button>
           </div>
 
@@ -357,13 +368,13 @@
           </div>
 
           <div class="setting-group">
-            <button id="btnOpenChangePassword" class="drawer-action-btn" style="margin-top: 6px; padding: 6px 10px;">
+            <button id="btnOpenAccountQuota" class="drawer-action-btn" style="margin-top: 6px; padding: 6px 10px;">
               <div class="drawer-action-info">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
                 </svg>
-                <span>تغییر رمز عبور (Password)</span>
+                <span>حساب گوگل و سهمیه مدل‌ها</span>
               </div>
             </button>
           </div>
@@ -559,6 +570,73 @@
         <div class="modal-body" style="padding: 12px 16px;">
           <div class="projects-list" id="projectsListContainer">
             <!-- Dynamic project items -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature: Antigravity Account & Model Quotas Modal -->
+    <div class="modal-backdrop" id="quotaModal">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <span class="modal-title">📊 سهمیه و وضعیت مدل‌های Antigravity</span>
+          </div>
+          <button id="btnCloseQuota" class="icon-btn" title="بستن">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body" style="padding: 16px 18px;">
+          <!-- Google Account Profile Card -->
+          <div class="account-profile-card">
+            <div class="account-avatar-large">G</div>
+            <div class="account-meta">
+              <div class="account-email" id="quotaModalEmail">mr.x.level.3@gmail.com</div>
+              <div class="account-status-tag">
+                <span class="status-indicator-dot online"></span>
+                <span id="quotaModalAuthMethod">Google Antigravity Connected</span>
+              </div>
+            </div>
+            <button id="btnOpenCliLoginGuide" class="account-login-btn" title="تغییر یا ورود اکانت گوگل">
+              🔑 ورود گوگل
+            </button>
+          </div>
+
+          <!-- Token Usage Meters -->
+          <div class="quota-section-title">⚡ آمار مصرف توکن‌ها (Token Usage)</div>
+          <div class="token-meters-grid">
+            <div class="token-meter-box">
+              <div class="meter-val" id="meterPromptTokens">1,420</div>
+              <div class="meter-label">توکن ورودی (Prompt)</div>
+            </div>
+            <div class="token-meter-box">
+              <div class="meter-val" id="meterThinkingTokens">3,850</div>
+              <div class="meter-label">توکن استدلال (Thinking)</div>
+            </div>
+            <div class="token-meter-box">
+              <div class="meter-val" id="meterResponseTokens">4,920</div>
+              <div class="meter-label">توکن پاسخ (Output)</div>
+            </div>
+          </div>
+
+          <!-- Models Quota Progress Bars -->
+          <div class="quota-section-title" style="margin-top: 18px;">🤖 سهمیه و نرخ مدل‌های هوش مصنوعی</div>
+          <div class="models-quota-list" id="modelsQuotaList">
+            <!-- Dynamic model quota cards -->
+          </div>
+
+          <!-- Termux CLI Login Guide Section -->
+          <div class="cli-login-box" id="cliLoginBox" style="display: none; margin-top: 16px;">
+            <div class="cli-login-title">📱 نحوه لاگین یا تغییر اکانت در ترموکس</div>
+            <p style="font-size: 12px; color: #9ca3af; margin: 6px 0 10px 0;">برای ورود به حساب گوگل یا تغییر ایمیل در گوشی (ترموکس)، کافیست در ترمینال دستور زیر را بزنید:</p>
+            <div class="code-snippet-box">
+              <code>agy --prompt "test"</code>
+            </div>
+            <p style="font-size: 11.5px; color: #a78bfa; margin-top: 8px;">لینک اختصاصی لاگین گوگل نمایش داده می‌شود. با باز کردن آن و تایید در مرورگر، اتصال اکانت در لحظه فعال خواهد شد.</p>
           </div>
         </div>
       </div>

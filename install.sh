@@ -143,8 +143,23 @@ check_agy_binary() {
         echo -e "${GREEN}✅ موتور هوش مصنوعی با موفقیت یافت شد: ${AGY_PATH}${NC}"
     else
         echo -e "${YELLOW}⚠️ توجه: باینری 'agy' در مسیرهای استاندارد سیستم یافت نشد.${NC}"
-        echo -e "${YELLOW}   برنامه وب کار خواهد کرد، اما برای اجرای کامل دستورات نیاز است باینری agy در سیستم فعال باشد.${NC}"
+        echo -e "${CYAN}💡 پس از اتمام نصب، برای فعال‌سازی کامل باینری رسمی دستور زیر را در ترموکس بزنید:${NC}"
+        echo -e "   curl -sL https://antigravity.google/install.sh | bash"
     fi
+}
+
+# 3.2. Check Google Antigravity OAuth Account
+check_google_auth() {
+    echo -e "${BLUE}🔐 در حال بررسی وضعیت اتصال اکانت گوگل Antigravity...${NC}"
+    TOKEN_FILE="$HOME/.gemini/jetski-standalone-oauth-token"
+    if [ -f "$TOKEN_FILE" ]; then
+        EMAIL=$(python3 -c "import json; print(json.load(open('$TOKEN_FILE')).get('id_token_email',''))" 2>/dev/null || true)
+        if [ -n "$EMAIL" ]; then
+            echo -e "${GREEN}✅ اکانت گوگل با موفقیت متصل است: ${BOLD}${EMAIL}${NC}"
+            return 0
+        fi
+    fi
+    echo -e "${YELLOW}ℹ️ اکانت گوگل هنوز متصل نشده است (در اولین اجرای agy یا از طریق پنل وب می‌توانید لاگین کنید).${NC}"
 }
 
 # 4. Resolve Installation Directory
@@ -262,7 +277,7 @@ print_summary() {
     if [ "$LOCAL_IP" != "127.0.0.1" ]; then
     echo -e "  🌐 آدرس در شبکه وای‌فای:  ${BOLD}${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
     fi
-    echo -e "  🔐 احراز هویت پیش‌فرض:    نام‌کاربری: ${BOLD}admin${NC} | رمز عبور: ${BOLD}antigravity${NC}"
+    echo -e "  ⚡ بدون نیاز به پسورد:    ${GREEN}ورود مستقیم و آنی به محیط کار${NC}"
     echo -e "${GREEN}================================================================${NC}"
     echo ""
 }
@@ -272,6 +287,7 @@ print_banner
 detect_os
 install_dependencies
 check_agy_binary
+check_google_auth
 install_or_update
 print_summary
 
