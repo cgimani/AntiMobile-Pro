@@ -1957,21 +1957,44 @@
 
   async function createNewChat() {
     closeDrawer();
+    triggerHaptic(15);
+    const newId = `chat_${Date.now()}`;
+    const newChatObj = {
+      id: newId,
+      title: 'گفتگوی جدید',
+      created_at: Date.now() / 1000,
+      updated_at: Date.now() / 1000,
+      model: currentModel,
+      effort: currentEffort,
+      mode: currentMode,
+      cwd: workspaceDir,
+      project_id: activeProjectId || 'proj_default',
+      messages: []
+    };
+    chats[newId] = newChatObj;
+    activeChatId = newId;
+    saveToLocalStorage();
+    renderMessages();
+    updateDrawerChatList();
+    if (inputMessage) inputMessage.focus();
+
     try {
       const res = await authFetch('/api/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'گفتگوی جدید', model: currentModel, project_id: activeProjectId })
+        body: JSON.stringify({ id: newId, title: 'گفتگوی جدید', model: currentModel, project_id: activeProjectId })
       });
-      const newChat = await res.json();
-      chats[newChat.id] = newChat;
-      activeChatId = newChat.id;
-      saveToLocalStorage();
-      renderMessages();
-      updateDrawerChatList();
-      inputMessage.focus();
+      if (res.ok) {
+        const serverChat = await res.json();
+        if (serverChat && serverChat.id) {
+          chats[serverChat.id] = { ...newChatObj, ...serverChat };
+          activeChatId = serverChat.id;
+          saveToLocalStorage();
+          updateDrawerChatList();
+        }
+      }
     } catch (e) {
-      console.error('Failed to create new chat:', e);
+      console.warn('Backend chat sync notice:', e);
     }
   }
 
@@ -2133,6 +2156,17 @@
     };
   }
 
+  function resetSendBtnState() {
+    if (!btnSend) return;
+    btnSend.classList.remove('stop-mode');
+    btnSend.title = 'ارسال پیام';
+    if (inputMessage && inputMessage.value.trim().length > 0) {
+      btnSend.classList.remove('btn-disabled');
+    } else {
+      btnSend.classList.add('btn-disabled');
+    }
+  }
+
   function handleWsMessage(data) {
     const type = data.type;
 
@@ -2235,10 +2269,7 @@
         const badge = liveThinkingEl.querySelector('.thinking-badge');
         if (badge) badge.textContent = 'متوقف شد';
       }
-      if (btnSend) {
-        btnSend.classList.remove('stop-mode');
-        btnSend.title = 'ارسال پیام';
-      }
+      resetSendBtnState();
       if (activeStreamingBubble) {
         activeStreamingBubble.innerHTML += '<br><em style="color:#ef4444;font-size:11px;">[عملیات متوقف گردید]</em>';
       }
@@ -2309,10 +2340,7 @@
           if (body) body.textContent = data.meta.thinking;
         }
       }
-      if (btnSend) {
-        btnSend.classList.remove('stop-mode');
-        btnSend.title = 'ارسال پیام';
-      }
+      resetSendBtnState();
 
       const fullText = data.full_text || currentStreamText;
       const targetChatId = data.chat_id || activeChatId;
@@ -2354,10 +2382,7 @@
       scrollToBottom(true);
     } else if (type === 'error') {
       if (thinkingRow) thinkingRow.classList.remove('active');
-      if (btnSend) {
-        btnSend.classList.remove('stop-mode');
-        btnSend.title = 'ارسال پیام';
-      }
+      resetSendBtnState();
       appendMessageBubble('assistant', `⚠️ **خطا:**\n${data.error}`, Date.now() / 1000, true, true);
       activeStreamingBubble = null;
       activeLiveCliEl = null;
@@ -2402,7 +2427,11 @@
     }
 
     const text = inputMessage.value.trim();
-    if (!text) return;
+    if (!text) {
+      triggerHaptic(10);
+      inputMessage.focus();
+      return;
+    }
 
     triggerHaptic(15);
     closeSlashPopover();
@@ -2442,7 +2471,7 @@
     // Clear input & reset height
     inputMessage.value = '';
     inputMessage.style.height = 'auto';
-    btnSend.disabled = false;
+    btnSend.classList.remove('btn-disabled');
     btnSend.classList.add('stop-mode');
     btnSend.title = 'توقف پردازش (Stop)';
 
@@ -2501,8 +2530,7 @@
       }));
     } else {
       appendMessageBubble('assistant', '⚠️ در حال برقراری مجدد ارتباط با سرور... لطفاً دوباره تلاش کنید.', Date.now() / 1000, true, true);
-      btnSend.classList.remove('stop-mode');
-      btnSend.title = 'ارسال پیام';
+      resetSendBtnState();
     }
   }
 
@@ -2800,11 +2828,33 @@
 
   // Drawer Controls
   function openDrawer() {
-    if (drawerBackdrop) drawerBackdrop.classList.add('open');
+    triggerHaptic(10);
+    updateDrawerChatList();
+    if (drawerBackdrop) {
+      drawerBackdrop.classList.add('open');
+      drawerBackdrop.style.display = 'block';
+    }
   }
 
   function closeDrawer() {
-    if (drawerBackdrop) drawerBackdrop.classList.remove('open');
+    triggerHaptic(10);
+    if (drawerBackdrop) {
+      drawerBackdrop.classList.remove('open');
+      setTimeout(() => {
+        if (!drawerBackdrop.classList.contains('open')) {
+          drawerBackdrop.style.display = 'none';
+        }
+      }, 250);
+    }
+  }
+
+  // Helper to bind guaranteed tap/click events
+  function bindAction(el, handler) {
+    if (!el) return;
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      handler(e);
+    });
   }
 
   // Setup Event Listeners
@@ -2813,7 +2863,13 @@
     inputMessage.addEventListener('input', () => {
       inputMessage.style.height = 'auto';
       inputMessage.style.height = Math.min(inputMessage.scrollHeight, 140) + 'px';
-      btnSend.disabled = inputMessage.value.trim().length === 0 && !btnSend.classList.contains('stop-mode');
+      if (btnSend) {
+        if (inputMessage.value.trim().length > 0 || btnSend.classList.contains('stop-mode')) {
+          btnSend.classList.remove('btn-disabled');
+        } else {
+          btnSend.classList.add('btn-disabled');
+        }
+      }
       handleInputPopovers();
     });
 
@@ -2881,13 +2937,13 @@
       }
     });
 
-    btnSend.addEventListener('click', sendMessage);
+    bindAction(btnSend, sendMessage);
 
     // Quick Control Pills
-    if (pillModel) pillModel.addEventListener('click', openModelSheet);
-    if (pillEffort) pillEffort.addEventListener('click', cycleEffort);
-    if (pillMode) pillMode.addEventListener('click', cycleMode);
-    if (btnCloseModelSheet) btnCloseModelSheet.addEventListener('click', closeModelSheet);
+    if (pillModel) bindAction(pillModel, openModelSheet);
+    if (pillEffort) bindAction(pillEffort, cycleEffort);
+    if (pillMode) bindAction(pillMode, cycleMode);
+    if (btnCloseModelSheet) bindAction(btnCloseModelSheet, closeModelSheet);
     if (modelSheetBackdrop) {
       modelSheetBackdrop.addEventListener('click', (e) => {
         if (e.target === modelSheetBackdrop) closeModelSheet();
@@ -2895,15 +2951,15 @@
     }
 
     // Header buttons
-    if (btnNewChat) btnNewChat.addEventListener('click', createNewChat);
-    if (btnMenu) btnMenu.addEventListener('click', openDrawer);
-    if (btnCloseDrawer) btnCloseDrawer.addEventListener('click', closeDrawer);
+    if (btnNewChat) bindAction(btnNewChat, createNewChat);
+    if (btnMenu) bindAction(btnMenu, openDrawer);
+    if (btnCloseDrawer) bindAction(btnCloseDrawer, closeDrawer);
     if (drawerBackdrop) {
       drawerBackdrop.addEventListener('click', (e) => {
         if (e.target === drawerBackdrop) closeDrawer();
       });
     }
-    if (btnDrawerNewChat) btnDrawerNewChat.addEventListener('click', createNewChat);
+    if (btnDrawerNewChat) bindAction(btnDrawerNewChat, createNewChat);
 
     // Header quick tools
     if (btnOpenFiles) btnOpenFiles.addEventListener('click', openFilesModal);

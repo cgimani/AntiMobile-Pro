@@ -2,7 +2,7 @@
 # ==============================================================================
 # ⚡ AntiMobile Pro - Universal Smart Installer, Updater & Manager
 # Supports: Android (Termux), macOS (Apple Silicon / Intel), Linux, WSL
-# Version: 3.1.0 (Semantic Versioning)
+# Version: 3.1.1 (Semantic Versioning)
 # ==============================================================================
 
 set -e
@@ -18,7 +18,7 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Version definition
-APP_VERSION="3.1.0"
+APP_VERSION="3.1.1"
 REPO_URL="https://github.com/cgimani/AntiMobile-Pro.git"
 DEFAULT_INSTALL_DIR="$HOME/AntiMobile-Pro"
 APP_NAME="antimobile"

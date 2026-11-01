@@ -3558,7 +3558,22 @@ html, body {
   color: #f87171;
 }
 
-/* Ensure all interactive controls have guaranteed pointer-events */
+/* Ensure all interactive controls have guaranteed pointer-events & instant touch */
+button svg, button svg * {
+  pointer-events: none !important;
+}
+
+button, .icon-btn, .input-btn, .chip-btn {
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: transparent !important;
+  cursor: pointer !important;
+}
+
+.input-btn.btn-disabled {
+  opacity: 0.35 !important;
+  cursor: default !important;
+}
+
 .header, .header-right, .header-left, .header-center, .icon-btn, .input-area-wrap, .input-box, .input-textarea, .input-btn {
   pointer-events: auto !important;
 }

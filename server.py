@@ -25,7 +25,7 @@ import tornado.websocket
 import tornado.ioloop
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "3.1.0"
+APP_VERSION = "3.1.1"
 PORT = int(os.environ.get('PORT', 7681))
 HOST = os.environ.get('HOST', '0.0.0.0')
 HISTORY_FILE = os.path.join(WORKSPACE_DIR, 'chat_history.json')
@@ -132,7 +132,7 @@ class AuthManager:
     def __init__(self, filepath: str = AUTH_CONFIG_FILE):
         self.filepath = filepath
         self.config: Dict[str, Any] = {
-            "enabled": True,
+            "enabled": False,
             "username": os.environ.get("ANTI_USERNAME", "admin"),
             "salt": "",
             "password_hash": "",
@@ -158,7 +158,7 @@ class AuthManager:
             self.config["salt"] = salt
             self.config["password_hash"] = self._hash_pwd(default_pwd, salt)
             self.config["username"] = os.environ.get("ANTI_USERNAME", "admin")
-            self.config["enabled"] = True
+            self.config["enabled"] = False
             if "sessions" not in self.config:
                 self.config["sessions"] = {}
             self.save()
@@ -211,7 +211,7 @@ class AuthManager:
         return False
 
     def validate_token(self, token: Optional[str]) -> Tuple[bool, Optional[str]]:
-        if not self.config.get("enabled", True):
+        if not self.config.get("enabled", False):
             return True, "admin"
         if not token:
             return False, None
@@ -1393,7 +1393,7 @@ class AuthStatusHandler(tornado.web.RequestHandler):
         self.finish(json.dumps({
             "authenticated": is_auth,
             "username": user if is_auth else None,
-            "auth_enabled": auth_manager.config.get("enabled", True)
+            "auth_enabled": auth_manager.config.get("enabled", False)
         }, ensure_ascii=False))
 
 class AuthChangePasswordHandler(BaseApiHandler):
