@@ -3417,4 +3417,105 @@ html, body {
   text-align: left;
 }
 
+/* ==========================================================================
+   Ultra-Minimalist Aesthetic Overrides (Distraction-Free)
+   ========================================================================== */
+
+/* 1. Hide the cluttered Quick Pill Bar completely */
+.quick-pill-bar, #quickPillBar {
+  display: none !important;
+}
+
+/* 2. Hide cluttered header items (keep only New Chat + Title + Drawer Menu) */
+#btnOpenFiles, #btnOpenProcesses, #headerStatusDot, .header-sub-sep, #headerModelText {
+  display: none !important;
+}
+
+.header {
+  padding: 0 16px;
+  background-color: #0d0d0d;
+  border-bottom: 1px solid #1f1f1f;
+}
+
+.header-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.header-project-badge {
+  font-size: 11px;
+  color: #737373;
+}
+
+/* 3. Hide extra keyboard toggle & mic buttons from input bar */
+#btnToggleKeys, #btnMic {
+  display: none !important;
+}
+
+/* 4. Minimal, clean input box */
+.input-box {
+  background: #141414;
+  border: 1px solid #262626;
+  border-radius: 20px;
+  padding: 8px 12px;
+}
+
+.input-box:focus-within {
+  border-color: #404040;
+}
+
+/* 5. Clean, distraction-free message bubbles */
+.msg-retry-btn {
+  display: none !important;
+}
+
+.assistant-model-tag {
+  display: none !important;
+}
+
+.assistant-header {
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.assistant-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #1e1e1e;
+  border: 1px solid #333333;
+  color: #a78bfa;
+  font-size: 12px;
+}
+
+.assistant-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ededed;
+}
+
+.bubble.user-bubble {
+  background: #202020;
+  border: 1px solid #2c2c2c;
+  border-radius: 16px 16px 4px 16px;
+  color: #f5f5f5;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+.bubble.ai-bubble {
+  background: transparent;
+  border: none;
+  padding: 4px 0 12px 0;
+  color: #e5e5e5;
+  font-size: 14px;
+}
+
+/* 6. Clean empty state */
+.empty-state {
+  margin-top: 15vh;
+}
+
+
 

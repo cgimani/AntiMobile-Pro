@@ -828,21 +828,6 @@
       p.textContent = content;
       bubble.appendChild(p);
 
-      // Add retry button under user message
-      const retryBtn = document.createElement('button');
-      retryBtn.className = 'msg-retry-btn';
-      retryBtn.innerHTML = `
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="1 4 1 10 7 10"></polyline>
-          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-        </svg>
-        تلاش مجدد
-      `;
-      retryBtn.onclick = () => {
-        retryMessage(content);
-      };
-      bubble.appendChild(retryBtn);
-
       if (timestamp) {
         const metaSpan = document.createElement('span');
         metaSpan.className = 'msg-meta';
@@ -855,11 +840,9 @@
       // 1. Assistant Header
       const header = document.createElement('div');
       header.className = 'assistant-header';
-      const modelName = (meta && meta.model) || currentModel;
       header.innerHTML = `
         <div class="assistant-avatar">⚡</div>
         <span class="assistant-name">Antigravity</span>
-        <span class="assistant-model-tag">${escapeHtml(modelName)}</span>
         <span class="msg-meta" style="margin-right:auto;">${formatTimestamp(timestamp || Date.now() / 1000)}</span>
       `;
       row.appendChild(header);
@@ -2465,7 +2448,6 @@
     header.innerHTML = `
       <div class="assistant-avatar">⚡</div>
       <span class="assistant-name">Antigravity</span>
-      <span class="assistant-model-tag">${escapeHtml(currentModel)}</span>
       <span class="msg-meta" style="margin-right:auto;">هم‌اکنون</span>
     `;
     row.appendChild(header);
