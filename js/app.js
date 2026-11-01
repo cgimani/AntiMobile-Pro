@@ -160,6 +160,40 @@
   let currentViewedFilePath = '';
   let currentViewedFileContent = '';
 
+  // In-App Code Editor Elements & State
+  const btnCodeEditToggle = document.getElementById('btnCodeEditToggle');
+  const btnCodeSave = document.getElementById('btnCodeSave');
+  const codeEditorInput = document.getElementById('codeEditorInput');
+  let isCodeEditing = false;
+
+  // Multi-Project Workspaces State & DOM Elements
+  let projects = {};
+  let activeProjectId = null;
+  let activeProject = null;
+
+  const headerProjectText = document.getElementById('headerProjectText');
+  const headerCenterBtn = document.getElementById('headerCenterBtn');
+  const drawerProjectName = document.getElementById('drawerProjectName');
+  const drawerProjectPath = document.getElementById('drawerProjectPath');
+  const projectActiveCard = document.getElementById('projectActiveCard');
+  const btnActiveProjectInfo = document.getElementById('btnActiveProjectInfo');
+  const btnDrawerNewProject = document.getElementById('btnDrawerNewProject');
+  const btnDrawerOpenProjects = document.getElementById('btnDrawerOpenProjects');
+  const btnDrawerProjects = document.getElementById('btnDrawerProjects');
+  const projectsBadgeDrawer = document.getElementById('projectsBadgeDrawer');
+  const drawerChatCount = document.getElementById('drawerChatCount');
+
+  const projectsModal = document.getElementById('projectsModal');
+  const btnCloseProjects = document.getElementById('btnCloseProjects');
+  const projectsModalBadge = document.getElementById('projectsModalBadge');
+  const btnToggleCreateProject = document.getElementById('btnToggleCreateProject');
+  const createProjectPanel = document.getElementById('createProjectPanel');
+  const newProjectName = document.getElementById('newProjectName');
+  const newProjectPath = document.getElementById('newProjectPath');
+  const btnSubmitCreateProject = document.getElementById('btnSubmitCreateProject');
+  const btnCancelCreateProject = document.getElementById('btnCancelCreateProject');
+  const projectsListContainer = document.getElementById('projectsListContainer');
+
   // Configure Marked with Highlight.js
   if (typeof marked !== 'undefined') {
     const renderer = new marked.Renderer();
@@ -1384,6 +1418,7 @@
     if (codeLineNumbers) codeLineNumbers.textContent = '1';
     if (codeHighlighted) codeHighlighted.textContent = 'در حال بارگذاری فایل...';
     if (codeViewerModal) codeViewerModal.classList.add('open');
+    toggleCodeEditMode(false);
 
     try {
       const res = await authFetch(`/api/file-content?path=${encodeURIComponent(filePath)}`);
@@ -1420,7 +1455,337 @@
   }
 
   function closeCodeViewer() {
+    toggleCodeEditMode(false);
     if (codeViewerModal) codeViewerModal.classList.remove('open');
+  }
+
+  // Toggle In-App Code Editor Mode
+  function toggleCodeEditMode(force) {
+    if (typeof force === 'boolean') {
+      isCodeEditing = force;
+    } else {
+      isCodeEditing = !isCodeEditing;
+    }
+    if (isCodeEditing) {
+      if (codeEditorInput) {
+        codeEditorInput.value = currentViewedFileContent;
+        codeEditorInput.style.display = 'block';
+        codeEditorInput.focus();
+      }
+      if (codeHighlighted && codeHighlighted.parentElement) codeHighlighted.parentElement.style.display = 'none';
+      if (codeLineNumbers) codeLineNumbers.style.display = 'none';
+      if (btnCodeSave) btnCodeSave.style.display = 'inline-flex';
+      if (btnCodeEditToggle) {
+        btnCodeEditToggle.classList.add('active');
+        btnCodeEditToggle.textContent = '👁️ پیش‌نمایش';
+      }
+    } else {
+      if (codeEditorInput) codeEditorInput.style.display = 'none';
+      if (codeHighlighted && codeHighlighted.parentElement) codeHighlighted.parentElement.style.display = 'block';
+      if (codeLineNumbers) codeLineNumbers.style.display = 'block';
+      if (btnCodeSave) btnCodeSave.style.display = 'none';
+      if (btnCodeEditToggle) {
+        btnCodeEditToggle.classList.remove('active');
+        btnCodeEditToggle.textContent = '✏️ ویرایش';
+      }
+    }
+  }
+
+  // Save File Content from In-App Code Editor
+  async function saveCurrentFileCode() {
+    if (!currentViewedFilePath || !codeEditorInput) return;
+    const newContent = codeEditorInput.value;
+    const origBtnText = btnCodeSave ? btnCodeSave.innerText : 'ذخیره';
+    if (btnCodeSave) {
+      btnCodeSave.innerText = 'در حال ذخیره...';
+      btnCodeSave.disabled = true;
+    }
+
+    try {
+      const res = await authFetch('/api/file-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: currentViewedFilePath, content: newContent })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        currentViewedFileContent = newContent;
+        if (btnCodeSave) {
+          btnCodeSave.innerText = '✅ ذخیره شد';
+          btnCodeSave.style.color = '#10b981';
+        }
+
+        // Re-highlight preview
+        const ext = currentViewedFilePath.split('.').pop().toLowerCase();
+        if (typeof hljs !== 'undefined') {
+          try {
+            if (ext && hljs.getLanguage(ext)) {
+              codeHighlighted.innerHTML = hljs.highlight(newContent, { language: ext }).value;
+            } else {
+              codeHighlighted.innerHTML = hljs.highlightAuto(newContent).value;
+            }
+          } catch (e) {
+            codeHighlighted.textContent = newContent;
+          }
+        } else {
+          codeHighlighted.textContent = newContent;
+        }
+
+        setTimeout(() => {
+          if (btnCodeSave) {
+            btnCodeSave.innerText = origBtnText;
+            btnCodeSave.disabled = false;
+            btnCodeSave.style.color = '';
+          }
+        }, 1500);
+      } else {
+        alert(data.error || 'خطا در ذخیره فایل');
+        if (btnCodeSave) {
+          btnCodeSave.innerText = origBtnText;
+          btnCodeSave.disabled = false;
+        }
+      }
+    } catch (err) {
+      alert(`خطا در ارتباط با سرور: ${err.message}`);
+      if (btnCodeSave) {
+        btnCodeSave.innerText = origBtnText;
+        btnCodeSave.disabled = false;
+      }
+    }
+  }
+
+  // =========================================================================
+  // Multi-Project Workspaces Management
+  // =========================================================================
+  async function fetchProjects() {
+    try {
+      const res = await authFetch('/api/projects');
+      if (res.ok) {
+        const data = await res.json();
+        activeProjectId = data.active_project_id;
+        activeProject = data.active_project;
+        projects = {};
+        if (data.projects) {
+          data.projects.forEach(p => {
+            projects[p.id] = p;
+          });
+        }
+        updateProjectUI();
+      }
+    } catch (e) {
+      console.warn('Could not fetch projects:', e);
+    }
+  }
+
+  function updateProjectUI() {
+    if (activeProject) {
+      if (drawerProjectName) drawerProjectName.textContent = activeProject.name || 'پروژه اصلی';
+      if (drawerProjectPath) {
+        drawerProjectPath.textContent = activeProject.path || '~';
+        drawerProjectPath.title = activeProject.path || '~';
+      }
+      if (headerProjectText) {
+        headerProjectText.textContent = `📁 ${activeProject.name || 'پروژه اصلی'}`;
+      }
+      if (workspacePathText) {
+        workspacePathText.textContent = activeProject.path || '~';
+      }
+    }
+
+    const pCount = Object.keys(projects).length;
+    if (projectsBadgeDrawer) projectsBadgeDrawer.textContent = pCount;
+    if (projectsModalBadge) projectsModalBadge.textContent = pCount;
+
+    renderProjectsModalList();
+  }
+
+  function renderProjectsModalList() {
+    if (!projectsListContainer) return;
+    projectsListContainer.innerHTML = '';
+
+    const pList = Object.values(projects);
+    if (!pList.length && activeProject) {
+      pList.push(activeProject);
+    }
+
+    pList.forEach(p => {
+      const isCurrent = (p.id === activeProjectId);
+      const card = document.createElement('div');
+      card.className = `project-item-card ${isCurrent ? 'active' : ''}`;
+
+      const info = document.createElement('div');
+      info.className = 'project-item-info';
+      info.onclick = () => {
+        if (!isCurrent) switchProject(p.id);
+      };
+
+      const header = document.createElement('div');
+      header.className = 'project-item-header';
+
+      const name = document.createElement('span');
+      name.className = 'project-item-name';
+      name.textContent = p.name || 'پروژه';
+      header.appendChild(name);
+
+      if (isCurrent) {
+        const activeTag = document.createElement('span');
+        activeTag.className = 'project-active-tag';
+        activeTag.textContent = 'فعال';
+        header.appendChild(activeTag);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'project-item-meta';
+
+      const count = document.createElement('span');
+      count.textContent = `${p.chat_count !== undefined ? p.chat_count : 1} گفتگو`;
+
+      const path = document.createElement('span');
+      path.className = 'project-item-path';
+      path.textContent = p.path || '~';
+      path.title = p.path || '~';
+
+      meta.appendChild(count);
+      meta.appendChild(path);
+
+      info.appendChild(header);
+      info.appendChild(meta);
+
+      const actions = document.createElement('div');
+      actions.className = 'project-item-actions';
+
+      if (!isCurrent) {
+        const switchBtn = document.createElement('button');
+        switchBtn.className = 'project-btn-switch';
+        switchBtn.textContent = 'انتخاب';
+        switchBtn.onclick = (e) => {
+          e.stopPropagation();
+          switchProject(p.id);
+        };
+        actions.appendChild(switchBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'project-btn-delete';
+        delBtn.title = 'حذف پروژه';
+        delBtn.innerHTML = `
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        `;
+        delBtn.onclick = (e) => {
+          e.stopPropagation();
+          deleteProject(p.id);
+        };
+        actions.appendChild(delBtn);
+      }
+
+      card.appendChild(info);
+      card.appendChild(actions);
+      projectsListContainer.appendChild(card);
+    });
+  }
+
+  async function switchProject(projectId) {
+    if (activeProjectId === projectId) {
+      closeProjectsModal();
+      return;
+    }
+    try {
+      const res = await authFetch(`/api/projects/${projectId}/switch`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        activeProjectId = data.active_project.id;
+        activeProject = data.active_project;
+        chats = {};
+        if (data.chats) {
+          data.chats.forEach(summary => {
+            chats[summary.id] = {
+              id: summary.id,
+              title: summary.title,
+              created_at: summary.created_at,
+              updated_at: summary.updated_at,
+              model: summary.model,
+              messages: []
+            };
+          });
+        }
+        activeChatId = data.active_project.active_chat_id || (data.chats && data.chats[0] ? data.chats[0].id : null);
+        if (activeChatId) {
+          const chatRes = await authFetch(`/api/chats/${activeChatId}`);
+          if (chatRes.ok) {
+            chats[activeChatId] = await chatRes.json();
+          }
+        }
+        updateProjectUI();
+        renderMessages();
+        updateDrawerChatList();
+        closeProjectsModal();
+        closeDrawer();
+
+        currentFilesPath = '';
+      }
+    } catch (e) {
+      console.error('Failed to switch project:', e);
+    }
+  }
+
+  async function createNewProject(name, path) {
+    if (!name || !name.trim()) {
+      alert('لطفاً نام پروژه را وارد نمایید.');
+      return;
+    }
+    try {
+      const res = await authFetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), path: (path || '').trim() })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (createProjectPanel) createProjectPanel.style.display = 'none';
+        if (newProjectName) newProjectName.value = '';
+        if (newProjectPath) newProjectPath.value = '';
+        await fetchProjects();
+        await switchProject(data.active_project_id);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'خطا در ایجاد پروژه');
+      }
+    } catch (e) {
+      alert('خطا در ارتباط با سرور: ' + e.message);
+    }
+  }
+
+  async function deleteProject(projectId) {
+    if (!confirm('آیا از حذف این پروژه مطمئن هستید؟ (فایل‌های داخل پوشه دست‌نخورده باقی می‌مانند اما نشست گفتگوهای آن پاک می‌شود)')) {
+      return;
+    }
+    try {
+      const res = await authFetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      if (res.ok) {
+        const data = await res.json();
+        await fetchProjects();
+        if (data.active_project) {
+          await switchProject(data.active_project.id);
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'امکان حذف این پروژه وجود ندارد.');
+      }
+    } catch (e) {
+      alert('خطا: ' + e.message);
+    }
+  }
+
+  function openProjectsModal() {
+    if (projectsModal) projectsModal.classList.add('open');
+    if (createProjectPanel) createProjectPanel.style.display = 'none';
+    renderProjectsModalList();
+  }
+
+  function closeProjectsModal() {
+    if (projectsModal) projectsModal.classList.remove('open');
   }
 
   // Copy Code in Viewer
@@ -1509,6 +1874,10 @@
       item.appendChild(delBtn);
       chatsList.appendChild(item);
     });
+
+    if (drawerChatCount) {
+      drawerChatCount.textContent = `${chatKeys.length} گفتگو`;
+    }
   }
 
   function switchChat(chatId) {
@@ -1540,7 +1909,7 @@
       const res = await authFetch('/api/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'گفتگوی جدید', model: currentModel })
+        body: JSON.stringify({ title: 'گفتگوی جدید', model: currentModel, project_id: activeProjectId })
       });
       const newChat = await res.json();
       chats[newChat.id] = newChat;
@@ -1583,6 +1952,7 @@
 
   async function fetchServerChats() {
     try {
+      await fetchProjects();
       const res = await authFetch('/api/chats');
       const data = await res.json();
       if (data && data.chats) {
@@ -1717,6 +2087,14 @@
     if (type === 'auth_error') {
       isAuthenticated = false;
       showLoginModal(data.message || 'احراز هویت نامعتبر است. لطفاً وارد شوید.');
+      return;
+    }
+
+    if (type === 'project_switched') {
+      if (data.project) {
+        fetchProjects();
+        fetchServerChats();
+      }
       return;
     }
 
@@ -2516,16 +2894,70 @@
       });
     }
 
-    // Code viewer modal buttons
+    // Code viewer modal buttons & In-App Editor
     if (btnCloseCodeViewer) btnCloseCodeViewer.addEventListener('click', closeCodeViewer);
     if (btnCodeCopy) btnCodeCopy.addEventListener('click', copyCurrentFileCode);
     if (btnCodeDownload) btnCodeDownload.addEventListener('click', downloadCurrentFile);
     if (btnCodeMention) btnCodeMention.addEventListener('click', mentionCurrentFile);
+    if (btnCodeEditToggle) btnCodeEditToggle.addEventListener('click', () => toggleCodeEditMode());
+    if (btnCodeSave) btnCodeSave.addEventListener('click', saveCurrentFileCode);
     if (codeViewerModal) {
       codeViewerModal.addEventListener('click', (e) => {
         if (e.target === codeViewerModal) closeCodeViewer();
       });
     }
+
+    // Projects Manager Modal & Triggers
+    if (headerCenterBtn) headerCenterBtn.addEventListener('click', openProjectsModal);
+    if (btnDrawerOpenProjects) btnDrawerOpenProjects.addEventListener('click', openProjectsModal);
+    if (btnDrawerProjects) btnDrawerProjects.addEventListener('click', openProjectsModal);
+    if (btnActiveProjectInfo) btnActiveProjectInfo.addEventListener('click', openProjectsModal);
+    if (btnDrawerNewProject) {
+      btnDrawerNewProject.addEventListener('click', () => {
+        openProjectsModal();
+        if (createProjectPanel) {
+          createProjectPanel.style.display = 'block';
+          if (newProjectName) newProjectName.focus();
+        }
+      });
+    }
+    if (btnCloseProjects) btnCloseProjects.addEventListener('click', closeProjectsModal);
+    if (projectsModal) {
+      projectsModal.addEventListener('click', (e) => {
+        if (e.target === projectsModal) closeProjectsModal();
+      });
+    }
+    if (btnToggleCreateProject) {
+      btnToggleCreateProject.addEventListener('click', () => {
+        if (createProjectPanel) {
+          const isHidden = (createProjectPanel.style.display === 'none');
+          createProjectPanel.style.display = isHidden ? 'block' : 'none';
+          if (isHidden && newProjectName) newProjectName.focus();
+        }
+      });
+    }
+    if (btnCancelCreateProject) {
+      btnCancelCreateProject.addEventListener('click', () => {
+        if (createProjectPanel) createProjectPanel.style.display = 'none';
+      });
+    }
+    if (btnSubmitCreateProject) {
+      btnSubmitCreateProject.addEventListener('click', () => {
+        const pName = newProjectName ? newProjectName.value : '';
+        const pPath = newProjectPath ? newProjectPath.value : '';
+        createNewProject(pName, pPath);
+      });
+    }
+
+    // Quick Path Chips for Projects
+    document.querySelectorAll('.quick-path-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        if (newProjectPath) {
+          newProjectPath.value = chip.getAttribute('data-path') || '';
+          newProjectPath.focus();
+        }
+      });
+    });
 
     // Model Change
     if (modelSelect) {

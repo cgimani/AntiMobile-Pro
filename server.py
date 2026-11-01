@@ -242,14 +242,18 @@ class AuthManager:
 
 auth_manager = AuthManager()
 
-# History Manager with atomic persistence
+# History Manager with multi-project & atomic persistence
 class HistoryManager:
     def __init__(self, filepath: str):
         self.filepath = filepath
         self.data: Dict[str, Any] = {
+            "active_project_id": "proj_default",
+            "projects": {},
             "active_chat_id": "default",
             "chats": {},
             "default_model": "gemini-3.8-flash-high",
+            "default_effort": "high",
+            "default_mode": "auto",
             "workspace": WORKSPACE_DIR
         }
         self.load()
@@ -264,33 +268,37 @@ class HistoryManager:
             except Exception as e:
                 print(f"[WARN] Error reading chat_history.json: {e}")
 
-        # Validate workspace path exists, else fallback to current directory
-        if not os.path.isdir(self.data.get("workspace", "")):
-            self.data["workspace"] = WORKSPACE_DIR
+        # Ensure default model/effort/mode
+        if "default_model" not in self.data:
+            self.data["default_model"] = "gemini-3.8-flash-high"
+        if "default_effort" not in self.data:
+            self.data["default_effort"] = "high"
+        if "default_mode" not in self.data:
+            self.data["default_mode"] = "auto"
 
-        for chat in self.data.get("chats", {}).values():
-            if not os.path.isdir(chat.get("cwd", "")):
-                chat["cwd"] = WORKSPACE_DIR
-
-        # Ensure default chat exists
-        if not self.data.get("chats"):
-            default_id = f"chat_{int(time.time())}"
-            self.data["chats"] = {
-                default_id: {
-                    "id": default_id,
-                    "title": "گفتگوی جدید",
+        # Auto-migrate legacy format (root 'chats') into 'projects'
+        projects = self.data.get("projects")
+        if not projects or not isinstance(projects, dict):
+            default_pid = "proj_default"
+            legacy_chats = self.data.get("chats", {})
+            legacy_ws = self.data.get("workspace", WORKSPACE_DIR)
+            if not os.path.isdir(legacy_ws):
+                legacy_ws = WORKSPACE_DIR
+            self.data["projects"] = {
+                default_pid: {
+                    "id": default_pid,
+                    "name": "پروژه اصلی",
+                    "path": legacy_ws,
                     "created_at": time.time(),
-                    "updated_at": time.time(),
-                    "agy_conversation_id": None,
-                    "model": self.data.get("default_model", "gemini-3.8-flash-high"),
-                    "cwd": self.data.get("workspace", WORKSPACE_DIR),
-                    "messages": []
+                    "active_chat_id": self.data.get("active_chat_id"),
+                    "chats": legacy_chats
                 }
             }
-            self.data["active_chat_id"] = default_id
-            self.save()
-        elif self.data.get("active_chat_id") not in self.data["chats"]:
-            self.data["active_chat_id"] = next(iter(self.data["chats"]))
+            self.data["active_project_id"] = default_pid
+
+        # Validate active project
+        self.get_active_project()
+        self.save()
 
     def save(self):
         try:
@@ -301,9 +309,164 @@ class HistoryManager:
         except Exception as e:
             print(f"[ERROR] Error saving chat_history.json: {e}")
 
-    def get_chats_summary(self):
+    def get_active_project(self) -> Dict[str, Any]:
+        projects = self.data.setdefault("projects", {})
+        pid = self.data.get("active_project_id")
+        if not pid or pid not in projects:
+            if projects:
+                pid = next(iter(projects))
+                self.data["active_project_id"] = pid
+            else:
+                pid = "proj_default"
+                projects[pid] = {
+                    "id": pid,
+                    "name": "پروژه اصلی",
+                    "path": WORKSPACE_DIR,
+                    "created_at": time.time(),
+                    "active_chat_id": None,
+                    "chats": {}
+                }
+                self.data["active_project_id"] = pid
+
+        proj = projects[pid]
+        # Validate project path
+        if not proj.get("path") or not os.path.isdir(proj["path"]):
+            proj["path"] = WORKSPACE_DIR
+
+        # Ensure active project has at least one chat
+        chats = proj.setdefault("chats", {})
+        if not chats:
+            cid = f"chat_{int(time.time() * 1000)}"
+            chats[cid] = {
+                "id": cid,
+                "title": "گفتگوی جدید",
+                "created_at": time.time(),
+                "updated_at": time.time(),
+                "agy_conversation_id": None,
+                "model": self.data.get("default_model", "gemini-3.8-flash-high"),
+                "cwd": proj["path"],
+                "project_id": pid,
+                "messages": []
+            }
+            proj["active_chat_id"] = cid
+
+        if not proj.get("active_chat_id") or proj.get("active_chat_id") not in chats:
+            proj["active_chat_id"] = next(iter(chats))
+
+        # Sync legacy flat references
+        self.data["chats"] = chats
+        self.data["active_chat_id"] = proj["active_chat_id"]
+        self.data["workspace"] = proj["path"]
+        return proj
+
+    def get_projects_summary(self) -> List[Dict[str, Any]]:
+        self.get_active_project()
+        active_pid = self.data.get("active_project_id")
         result = []
-        for cid, chat in self.data["chats"].items():
+        for pid, proj in self.data.get("projects", {}).items():
+            result.append({
+                "id": pid,
+                "name": proj.get("name", "پروژه"),
+                "path": proj.get("path", WORKSPACE_DIR),
+                "created_at": proj.get("created_at", 0),
+                "chat_count": len(proj.get("chats", {})),
+                "is_active": (pid == active_pid)
+            })
+        result.sort(key=lambda x: (not x["is_active"], x["created_at"]))
+        return result
+
+    def create_project(self, name: str, path: str) -> Dict[str, Any]:
+        clean_name = name.strip() if name and name.strip() else "پروژه جدید"
+        clean_path = os.path.expanduser(path.strip()) if path and path.strip() else WORKSPACE_DIR
+        clean_path = os.path.abspath(clean_path)
+
+        try:
+            os.makedirs(clean_path, exist_ok=True)
+        except Exception as e:
+            print(f"[WARN] Could not create project directory {clean_path}: {e}")
+
+        pid = f"proj_{int(time.time() * 1000)}"
+        first_cid = f"chat_{int(time.time() * 1000)}"
+        model_to_use = self.data.get("default_model", "gemini-3.8-flash-high")
+
+        new_proj = {
+            "id": pid,
+            "name": clean_name,
+            "path": clean_path,
+            "created_at": time.time(),
+            "active_chat_id": first_cid,
+            "chats": {
+                first_cid: {
+                    "id": first_cid,
+                    "title": "گفتگوی جدید",
+                    "created_at": time.time(),
+                    "updated_at": time.time(),
+                    "agy_conversation_id": None,
+                    "model": model_to_use,
+                    "cwd": clean_path,
+                    "project_id": pid,
+                    "messages": []
+                }
+            }
+        }
+        self.data.setdefault("projects", {})[pid] = new_proj
+        self.data["active_project_id"] = pid
+        self.data["chats"] = new_proj["chats"]
+        self.data["active_chat_id"] = first_cid
+        self.data["workspace"] = clean_path
+        self.save()
+        return new_proj
+
+    def switch_project(self, project_id: str) -> Optional[Dict[str, Any]]:
+        projects = self.data.get("projects", {})
+        if project_id not in projects:
+            return None
+        self.data["active_project_id"] = project_id
+        proj = self.get_active_project()
+        self.save()
+        return proj
+
+    def update_project(self, project_id: str, name: Optional[str] = None, path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        projects = self.data.get("projects", {})
+        if project_id not in projects:
+            return None
+        proj = projects[project_id]
+        if name and name.strip():
+            proj["name"] = name.strip()
+        if path and path.strip():
+            clean_path = os.path.abspath(os.path.expanduser(path.strip()))
+            try:
+                os.makedirs(clean_path, exist_ok=True)
+            except Exception:
+                pass
+            proj["path"] = clean_path
+            for ch in proj.get("chats", {}).values():
+                ch["cwd"] = clean_path
+            if self.data.get("active_project_id") == project_id:
+                self.data["workspace"] = clean_path
+        self.save()
+        return proj
+
+    def delete_project(self, project_id: str) -> bool:
+        projects = self.data.get("projects", {})
+        if project_id not in projects or len(projects) <= 1:
+            return False
+        del projects[project_id]
+        if self.data.get("active_project_id") == project_id:
+            new_pid = next(iter(projects))
+            self.switch_project(new_pid)
+        else:
+            self.save()
+        return True
+
+    def get_chats_summary(self, project_id: Optional[str] = None):
+        if project_id and project_id in self.data.get("projects", {}):
+            proj = self.data["projects"][project_id]
+        else:
+            proj = self.get_active_project()
+
+        result = []
+        for cid, chat in proj.get("chats", {}).items():
             result.append({
                 "id": cid,
                 "title": chat.get("title", "گفتگو"),
@@ -311,17 +474,34 @@ class HistoryManager:
                 "updated_at": chat.get("updated_at", 0),
                 "message_count": len(chat.get("messages", [])),
                 "model": chat.get("model", "gemini-3.8-flash-high"),
-                "agy_conversation_id": chat.get("agy_conversation_id")
+                "agy_conversation_id": chat.get("agy_conversation_id"),
+                "project_id": proj.get("id"),
+                "cwd": chat.get("cwd", proj.get("path"))
             })
         result.sort(key=lambda x: x["updated_at"], reverse=True)
         return result
 
-    def get_chat(self, chat_id: str):
-        return self.data["chats"].get(chat_id)
+    def get_chat(self, chat_id: str, project_id: Optional[str] = None):
+        if project_id and project_id in self.data.get("projects", {}):
+            return self.data["projects"][project_id].get("chats", {}).get(chat_id)
+        active_proj = self.get_active_project()
+        if chat_id in active_proj.get("chats", {}):
+            return active_proj["chats"][chat_id]
+        # Search all projects
+        for p in self.data.get("projects", {}).values():
+            if chat_id in p.get("chats", {}):
+                return p["chats"][chat_id]
+        return None
 
-    def create_chat(self, title: str = "گفتگوی جدید", model: Optional[str] = None):
+    def create_chat(self, title: str = "گفتگوی جدید", model: Optional[str] = None, project_id: Optional[str] = None):
+        if project_id and project_id in self.data.get("projects", {}):
+            proj = self.data["projects"][project_id]
+        else:
+            proj = self.get_active_project()
+
         cid = f"chat_{int(time.time() * 1000)}"
         model_to_use = model or self.data.get("default_model", "gemini-3.8-flash-high")
+        cwd = proj.get("path") or WORKSPACE_DIR
         new_chat = {
             "id": cid,
             "title": title,
@@ -329,26 +509,39 @@ class HistoryManager:
             "updated_at": time.time(),
             "agy_conversation_id": None,
             "model": model_to_use,
-            "cwd": self.data.get("workspace", WORKSPACE_DIR),
+            "cwd": cwd,
+            "project_id": proj.get("id"),
             "messages": []
         }
-        self.data["chats"][cid] = new_chat
-        self.data["active_chat_id"] = cid
+        proj.setdefault("chats", {})[cid] = new_chat
+        proj["active_chat_id"] = cid
+        if proj.get("id") == self.data.get("active_project_id"):
+            self.data["chats"] = proj["chats"]
+            self.data["active_chat_id"] = cid
         self.save()
         return new_chat
 
-    def delete_chat(self, chat_id: str):
-        if chat_id in self.data["chats"]:
-            del self.data["chats"][chat_id]
-            if not self.data["chats"]:
-                return self.create_chat()
-            if self.data.get("active_chat_id") == chat_id:
-                self.data["active_chat_id"] = next(iter(self.data["chats"]))
+    def delete_chat(self, chat_id: str, project_id: Optional[str] = None):
+        if project_id and project_id in self.data.get("projects", {}):
+            proj = self.data["projects"][project_id]
+        else:
+            proj = self.get_active_project()
+
+        chats = proj.get("chats", {})
+        if chat_id in chats:
+            del chats[chat_id]
+            if not chats:
+                return self.create_chat(project_id=proj.get("id"))
+            if proj.get("active_chat_id") == chat_id:
+                proj["active_chat_id"] = next(iter(chats))
+            if proj.get("id") == self.data.get("active_project_id"):
+                self.data["chats"] = chats
+                self.data["active_chat_id"] = proj["active_chat_id"]
             self.save()
-        return self.get_chat(self.data["active_chat_id"])
+        return self.get_chat(proj["active_chat_id"])
 
     def clear_chat(self, chat_id: str):
-        chat = self.data["chats"].get(chat_id)
+        chat = self.get_chat(chat_id)
         if chat:
             chat["messages"] = []
             chat["agy_conversation_id"] = None
@@ -358,12 +551,11 @@ class HistoryManager:
         return False
 
     def add_message(self, chat_id: str, role: str, content: str, meta: Optional[Dict[str, Any]] = None):
-        chat = self.data["chats"].get(chat_id)
+        chat = self.get_chat(chat_id)
         if not chat:
             chat = self.create_chat()
             chat_id = chat["id"]
-        
-        # Auto-update title if default
+
         if role == "user" and (chat.get("title") == "گفتگوی جدید" or not chat.get("title")):
             cleaned = content.strip().split('\n')[0][:40]
             if cleaned:
@@ -377,7 +569,15 @@ class HistoryManager:
         }
         chat["messages"].append(msg)
         chat["updated_at"] = time.time()
-        self.data["active_chat_id"] = chat_id
+
+        # Update active chat id in owner project
+        for p in self.data.get("projects", {}).values():
+            if chat_id in p.get("chats", {}):
+                p["active_chat_id"] = chat_id
+                if p.get("id") == self.data.get("active_project_id"):
+                    self.data["active_chat_id"] = chat_id
+                break
+
         self.save()
         return msg
 
@@ -445,6 +645,24 @@ def get_open_ports() -> List[int]:
         except Exception:
             pass
     return open_ports
+
+# Security check to allow user home, workspace, or any project path
+def is_path_allowed(target_path: str) -> bool:
+    try:
+        target_abs = os.path.abspath(os.path.expanduser(target_path))
+        allowed_roots = [USER_HOME, WORKSPACE_DIR]
+        # Common mobile & Unix storage roots
+        for mobile_root in ['/sdcard', '/storage/emulated/0', '/data/data/com.termux/files']:
+            if os.path.exists(mobile_root):
+                allowed_roots.append(mobile_root)
+        # All configured projects paths
+        for proj in history_mgr.data.get("projects", {}).values():
+            p_path = proj.get("path")
+            if p_path:
+                allowed_roots.append(os.path.abspath(os.path.expanduser(p_path)))
+        return any(target_abs.startswith(r) for r in allowed_roots)
+    except Exception:
+        return False
 
 # Get user processes from system
 def get_system_processes() -> List[Dict[str, Any]]:
@@ -543,7 +761,8 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
         chat = history_mgr.create_chat()
         chat_id = chat["id"]
 
-    cwd = chat.get("cwd") or WORKSPACE_DIR
+    active_proj = history_mgr.get_active_project()
+    cwd = chat.get("cwd") or active_proj.get("path") or WORKSPACE_DIR
     if not os.path.isdir(cwd):
         cwd = WORKSPACE_DIR
 
@@ -1163,12 +1382,127 @@ class AuthChangePasswordHandler(BaseApiHandler):
             "username": auth_manager.config.get("username", "admin")
         }, ensure_ascii=False))
 
+class ProjectsApiHandler(BaseApiHandler):
+    def set_default_headers(self):
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+    def options(self, *args):
+        self.set_status(204)
+        self.finish()
+
+    def get(self):
+        active_proj = history_mgr.get_active_project()
+        self.write(json.dumps({
+            "projects": history_mgr.get_projects_summary(),
+            "active_project_id": history_mgr.data.get("active_project_id"),
+            "active_project": active_proj
+        }, ensure_ascii=False))
+
+    def post(self):
+        try:
+            body = json.loads(self.request.body.decode('utf-8')) if self.request.body else {}
+        except Exception:
+            body = {}
+        name = body.get("name", "پروژه جدید")
+        path = body.get("path", "")
+        new_proj = history_mgr.create_project(name=name, path=path)
+        self.write(json.dumps({
+            "success": True,
+            "project": new_proj,
+            "active_project_id": new_proj["id"],
+            "projects": history_mgr.get_projects_summary()
+        }, ensure_ascii=False))
+
+class ProjectDetailApiHandler(BaseApiHandler):
+    def set_default_headers(self):
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+    def options(self, *args):
+        self.set_status(204)
+        self.finish()
+
+    def get(self, project_id):
+        proj = history_mgr.data.get("projects", {}).get(project_id)
+        if not proj:
+            self.set_status(404)
+            self.write(json.dumps({"error": "پروژه یافت نشد."}))
+            return
+        self.write(json.dumps(proj, ensure_ascii=False))
+
+    def put(self, project_id):
+        try:
+            body = json.loads(self.request.body.decode('utf-8')) if self.request.body else {}
+        except Exception:
+            body = {}
+        updated = history_mgr.update_project(project_id, name=body.get("name"), path=body.get("path"))
+        if not updated:
+            self.set_status(404)
+            self.write(json.dumps({"error": "پروژه یافت نشد."}))
+            return
+        self.write(json.dumps({
+            "success": True,
+            "project": updated,
+            "projects": history_mgr.get_projects_summary()
+        }, ensure_ascii=False))
+
+    def delete(self, project_id):
+        success = history_mgr.delete_project(project_id)
+        if not success:
+            self.set_status(400)
+            self.write(json.dumps({"error": "امکان حذف این پروژه وجود ندارد (حداقل یک پروژه باید در سیستم باقی بماند)."}))
+            return
+        self.write(json.dumps({
+            "success": True,
+            "active_project": history_mgr.get_active_project(),
+            "projects": history_mgr.get_projects_summary()
+        }, ensure_ascii=False))
+
+class ProjectSwitchApiHandler(BaseApiHandler):
+    def set_default_headers(self):
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+    def options(self, *args):
+        self.set_status(204)
+        self.finish()
+
+    def post(self, project_id):
+        proj = history_mgr.switch_project(project_id)
+        if not proj:
+            self.set_status(404)
+            self.write(json.dumps({"error": "پروژه یافت نشد."}))
+            return
+
+        broadcast({
+            "type": "project_switched",
+            "project": {
+                "id": proj["id"],
+                "name": proj["name"],
+                "path": proj["path"]
+            },
+            "active_chat_id": proj.get("active_chat_id")
+        })
+
+        self.write(json.dumps({
+            "success": True,
+            "active_project": proj,
+            "chats": history_mgr.get_chats_summary(proj["id"])
+        }, ensure_ascii=False))
+
 class ChatApiHandler(BaseApiHandler):
     def set_default_headers(self):
         self.set_header("Content-Type", "application/json; charset=UTF-8")
         self.set_header("Access-Control-Allow-Origin", "*")
         self.set_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     def options(self, *args):
         self.set_status(204)
@@ -1184,12 +1518,16 @@ class ChatApiHandler(BaseApiHandler):
                 self.write(json.dumps({"error": "Chat not found"}))
         else:
             summaries = history_mgr.get_chats_summary()
-            active_id = history_mgr.data.get("active_chat_id")
+            active_proj = history_mgr.get_active_project()
+            active_id = active_proj.get("active_chat_id")
             self.write(json.dumps({
+                "active_project_id": active_proj.get("id"),
+                "active_project_name": active_proj.get("name"),
+                "active_project_path": active_proj.get("path"),
                 "active_chat_id": active_id,
                 "chats": summaries,
                 "default_model": history_mgr.data.get("default_model", "gemini-3.8-flash-high"),
-                "workspace": history_mgr.data.get("workspace", WORKSPACE_DIR)
+                "workspace": active_proj.get("path", WORKSPACE_DIR)
             }, ensure_ascii=False))
 
     def post(self, chat_id=None):
@@ -1204,9 +1542,10 @@ class ChatApiHandler(BaseApiHandler):
             self.write(json.dumps({"success": success}))
             return
 
+        project_id = body.get("project_id")
         title = body.get("title", "گفتگوی جدید")
         model = body.get("model")
-        new_chat = history_mgr.create_chat(title=title, model=model)
+        new_chat = history_mgr.create_chat(title=title, model=model, project_id=project_id)
         self.write(json.dumps(new_chat, ensure_ascii=False))
 
     def delete(self, chat_id=None):
@@ -1475,7 +1814,7 @@ class ProcessInputApiHandler(BaseApiHandler):
 
         self.write(json.dumps({"success": matched, "pid": pid}))
 
-# Feature 4: Built-in File Explorer & Code Viewer Endpoints
+# Feature 4: Built-in File Explorer, Code Viewer & In-App Editor Endpoints
 class FilesApiHandler(BaseApiHandler):
     def set_default_headers(self):
         self.set_header("Content-Type", "application/json; charset=UTF-8")
@@ -1483,15 +1822,16 @@ class FilesApiHandler(BaseApiHandler):
 
     def get(self):
         req_path = self.get_argument("path", "")
-        base_dir = history_mgr.data.get("workspace", WORKSPACE_DIR)
+        active_proj = history_mgr.get_active_project()
+        base_dir = active_proj.get("path", WORKSPACE_DIR)
 
         if not req_path:
             target_dir = base_dir
         else:
-            target_dir = os.path.abspath(req_path)
+            target_dir = os.path.abspath(os.path.expanduser(req_path))
 
-        # Basic path security check
-        if not target_dir.startswith(USER_HOME) and not target_dir.startswith(WORKSPACE_DIR):
+        # Dynamic path security check
+        if not is_path_allowed(target_dir):
             target_dir = base_dir
 
         if not os.path.exists(target_dir):
@@ -1540,6 +1880,7 @@ class FilesApiHandler(BaseApiHandler):
 
         self.write(json.dumps({
             "current_path": target_dir,
+            "project_name": active_proj.get("name"),
             "parent_path": parent_path,
             "items": items
         }, ensure_ascii=False))
@@ -1551,14 +1892,19 @@ class FileContentApiHandler(BaseApiHandler):
 
     def get(self):
         file_path = self.get_argument("path", "")
-        if not file_path or not os.path.isfile(file_path):
+        if not file_path:
             self.set_status(404)
             self.write(json.dumps({"error": "فایل یافت نشد."}))
             return
 
-        # Security check: within user home
-        norm_path = os.path.abspath(file_path)
-        if not norm_path.startswith(USER_HOME) and not norm_path.startswith(WORKSPACE_DIR):
+        norm_path = os.path.abspath(os.path.expanduser(file_path))
+        if not os.path.isfile(norm_path):
+            self.set_status(404)
+            self.write(json.dumps({"error": "فایل یافت نشد."}))
+            return
+
+        # Security check
+        if not is_path_allowed(norm_path):
             self.set_status(403)
             self.write(json.dumps({"error": "دسترسی غیرمجاز"}))
             return
@@ -1613,15 +1959,73 @@ class FileContentApiHandler(BaseApiHandler):
             self.set_status(500)
             self.write(json.dumps({"error": str(e)}))
 
+class FileSaveApiHandler(BaseApiHandler):
+    def set_default_headers(self):
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+    def options(self, *args):
+        self.set_status(204)
+        self.finish()
+
+    def post(self):
+        try:
+            body = json.loads(self.request.body.decode('utf-8')) if self.request.body else {}
+        except Exception:
+            body = {}
+
+        file_path = body.get("path", "").strip()
+        content = body.get("content", "")
+
+        if not file_path:
+            self.set_status(400)
+            self.write(json.dumps({"error": "مسیر فایل الزامی است."}))
+            return
+
+        norm_path = os.path.abspath(os.path.expanduser(file_path))
+        if not is_path_allowed(norm_path):
+            self.set_status(403)
+            self.write(json.dumps({"error": "دسترسی غیرمجاز برای ذخیره در این مسیر."}))
+            return
+
+        try:
+            os.makedirs(os.path.dirname(norm_path), exist_ok=True)
+            tmp_path = norm_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.replace(tmp_path, norm_path)
+            self.write(json.dumps({
+                "success": True,
+                "path": norm_path,
+                "filename": os.path.basename(norm_path),
+                "size": len(content.encode('utf-8')),
+                "mtime": os.path.getmtime(norm_path)
+            }, ensure_ascii=False))
+        except Exception as e:
+            self.set_status(500)
+            self.write(json.dumps({"error": f"خطا در ذخیره فایل: {str(e)}"}))
+
 class FileDownloadHandler(BaseApiHandler):
     def get(self):
         file_path = self.get_argument("path", "")
-        if not file_path or not os.path.isfile(file_path):
+        if not file_path:
             self.set_status(404)
             self.write("File not found")
             return
 
-        norm_path = os.path.abspath(file_path)
+        norm_path = os.path.abspath(os.path.expanduser(file_path))
+        if not os.path.isfile(norm_path):
+            self.set_status(404)
+            self.write("File not found")
+            return
+
+        if not is_path_allowed(norm_path):
+            self.set_status(403)
+            self.write("Access denied")
+            return
+
         filename = os.path.basename(norm_path)
         self.set_header('Content-Type', 'application/octet-stream')
         self.set_header('Content-Disposition', f'attachment; filename="{filename}"')
@@ -1759,6 +2163,20 @@ class ChatWebSocket(tornado.websocket.WebSocketHandler):
             }, ensure_ascii=False))
 
             await execute_agy_turn(chat_id, content, self)
+
+        elif msg_type == "switch_project":
+            target_pid = data.get("project_id")
+            proj = history_mgr.switch_project(target_pid)
+            if proj:
+                broadcast({
+                    "type": "project_switched",
+                    "project": {
+                        "id": proj["id"],
+                        "name": proj["name"],
+                        "path": proj["path"]
+                    },
+                    "active_chat_id": proj.get("active_chat_id")
+                })
 
         elif msg_type == "switch_chat":
             target_id = data.get("chat_id")
@@ -1899,6 +2317,11 @@ def make_app():
         (r"/api/auth/status", AuthStatusHandler),
         (r"/api/auth/change-password", AuthChangePasswordHandler),
 
+        # Projects Endpoints
+        (r"/api/projects", ProjectsApiHandler),
+        (r"/api/projects/([^/]+)/switch", ProjectSwitchApiHandler),
+        (r"/api/projects/([^/]+)", ProjectDetailApiHandler),
+
         (r"/api/chats", ChatApiHandler),
         (r"/api/chats/(.*)", ChatApiHandler),
         (r"/api/models", ModelsApiHandler),
@@ -1915,6 +2338,7 @@ def make_app():
         # Feature 4: Files Endpoints
         (r"/api/files", FilesApiHandler),
         (r"/api/file-content", FileContentApiHandler),
+        (r"/api/file-save", FileSaveApiHandler),
         (r"/api/file-download", FileDownloadHandler),
         
         # Feature 5: Health & Restart Endpoints
