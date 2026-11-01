@@ -1,0 +1,574 @@
+/**
+ * Antigravity PWA - Interactive Components
+ * Terminal Lines, ANSI Styles, Slash Autocomplete, Modals, File Explorer, Toast
+ */
+
+/* ==========================================================================
+   Terminal Output Entries
+   ========================================================================== */
+.terminal-entry {
+  margin-bottom: 14px;
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* User Command / Prompt Entry */
+.entry-user {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(0, 240, 255, 0.05);
+  border-right: 3px solid var(--color-cyan);
+  border-radius: var(--radius-xs);
+  margin-top: 8px;
+}
+
+.entry-user-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.entry-user-prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  word-break: break-word;
+}
+
+.user-chevron {
+  color: var(--color-cyan);
+  font-weight: 700;
+  user-select: none;
+}
+
+/* AI Assistant Response */
+.entry-ai {
+  padding: 10px 14px;
+  background: rgba(14, 18, 26, 0.7);
+  border: 1px solid var(--border-glass-subtle);
+  border-radius: var(--radius-sm);
+  border-right: 3px solid var(--color-violet);
+  margin-top: 6px;
+  font-family: var(--font-persian);
+  line-height: 1.7;
+}
+
+.entry-ai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  color: var(--color-violet);
+}
+
+.ai-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-violet);
+  box-shadow: 0 0 6px var(--color-violet);
+}
+
+/* Raw CLI & Shell Outputs */
+.entry-cli-stdout {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+  direction: ltr;
+  text-align: left;
+  padding: 6px 10px;
+  color: var(--ansi-white);
+  border-radius: var(--radius-xs);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.entry-cli-stderr {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+  direction: ltr;
+  text-align: left;
+  padding: 6px 10px;
+  color: var(--ansi-red);
+  background: rgba(255, 85, 102, 0.08);
+  border-right: 2px solid var(--ansi-red);
+  border-radius: var(--radius-xs);
+}
+
+/* Code Snippet Blocks */
+.code-block-wrap {
+  position: relative;
+  margin: 10px 0;
+  border-radius: var(--radius-sm);
+  background: #050608;
+  border: 1px solid var(--border-glass);
+  direction: ltr;
+  text-align: left;
+  overflow: hidden;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-glass-subtle);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.btn-copy-code {
+  background: transparent;
+  border: 1px solid var(--border-glass);
+  color: var(--text-secondary);
+  border-radius: var(--radius-xs);
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.btn-copy-code:hover {
+  color: var(--color-cyan);
+  border-color: var(--color-cyan);
+}
+
+.code-block-content {
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-x: auto;
+  color: #38bdf8;
+}
+
+/* Blinking Terminal Cursor */
+.terminal-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 16px;
+  background-color: var(--color-cyan);
+  vertical-align: middle;
+  margin-right: 4px;
+  animation: blinkCursor 0.9s infinite step-start;
+  box-shadow: 0 0 8px var(--color-cyan);
+}
+
+/* Tool execution status pill */
+.tool-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 184, 0, 0.1);
+  border: 1px solid rgba(255, 184, 0, 0.3);
+  color: var(--color-amber);
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+/* ==========================================================================
+   Slash Command Autocomplete Popover
+   ========================================================================== */
+.slash-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 14px;
+  left: 14px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: rgba(12, 14, 20, 0.96);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  border: 1px solid var(--border-glass-hover);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-glass), var(--glow-sm);
+  z-index: 35;
+  display: none;
+  flex-direction: column;
+  padding: 6px;
+}
+
+.slash-popover.active {
+  display: flex;
+}
+
+.slash-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.slash-item:hover, .slash-item.selected {
+  background: rgba(0, 240, 255, 0.12);
+  border-right: 3px solid var(--color-cyan);
+}
+
+.slash-cmd-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-cyan);
+  font-size: 13px;
+  direction: ltr;
+}
+
+.slash-cmd-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   Sidebar Cards & Sections
+   ========================================================================== */
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.glass-card {
+  background: var(--bg-glass-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s ease;
+}
+
+.glass-card:hover {
+  border-color: var(--border-glass-hover);
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.info-label {
+  color: var(--text-secondary);
+}
+
+.info-value {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-weight: 500;
+  direction: ltr;
+}
+
+/* Model Selector Cards */
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.model-option:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--border-glass-hover);
+}
+
+.model-option.active {
+  background: rgba(0, 240, 255, 0.12);
+  border-color: var(--color-cyan);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
+}
+
+.model-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.model-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.model-provider {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.model-check {
+  color: var(--color-cyan);
+  font-size: 14px;
+}
+
+/* File Explorer */
+.file-tree-container {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  direction: ltr;
+  text-align: left;
+}
+
+.file-tree-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.file-icon {
+  font-size: 14px;
+}
+
+.file-name {
+  flex: 1;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+/* Quick Action Buttons */
+.quick-action-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  text-align: right;
+}
+
+.quick-action-btn:hover {
+  background: rgba(0, 240, 255, 0.08);
+  border-color: var(--border-glass-hover);
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   File Viewer & Editor Modal
+   ========================================================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.25s ease;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal-box {
+  width: 100%;
+  max-width: 760px;
+  max-height: 85vh;
+  background: rgba(10, 12, 18, 0.96);
+  border: 1px solid var(--border-glass-hover);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-glass), var(--glow-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-header {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.modal-file-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-cyan);
+  direction: ltr;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  padding: 5px 14px;
+  border-radius: var(--radius-xs);
+  background: linear-gradient(135deg, var(--color-cyan), #0099ff);
+  border: none;
+  color: #000000;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  box-shadow: var(--glow-sm);
+  transform: translateY(-1px);
+}
+
+.modal-editor-body {
+  flex: 1;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-editor-area {
+  width: 100%;
+  height: 420px;
+  background: #040507;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xs);
+  padding: 12px;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  resize: none;
+  outline: none;
+  direction: ltr;
+  text-align: left;
+  white-space: pre;
+  overflow: auto;
+}
+
+.code-editor-area:focus {
+  border-color: var(--color-cyan);
+}
+
+/* ==========================================================================
+   Toast Notification System
+   ========================================================================== */
+.toast-container {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 10px 18px;
+  background: rgba(14, 18, 26, 0.94);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  border: 1px solid var(--border-glass-hover);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), var(--glow-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: auto;
+}
+
+.toast.success {
+  border-color: var(--color-emerald);
+  color: var(--color-emerald);
+}
+
+.toast.error {
+  border-color: var(--color-coral);
+  color: var(--color-coral);
+}

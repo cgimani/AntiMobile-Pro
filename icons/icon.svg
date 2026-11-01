@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#051025"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </radialGradient>
+    <linearGradient id="neonCyan" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f0ff"/>
+      <stop offset="50%" stop-color="#00ff9d"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bgGlow)" />
+  <circle cx="256" cy="256" r="210" fill="none" stroke="url(#neonCyan)" stroke-width="4" stroke-dasharray="8 6" opacity="0.6"/>
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#neonCyan)" stroke-width="2" opacity="0.3"/>
+  <g filter="url(#glow)">
+    <!-- Antigravity Chevron Symbol -->
+    <path d="M 256 95 L 390 395 L 320 395 L 256 250 L 192 395 L 122 395 Z" fill="url(#neonCyan)"/>
+    <!-- Floating core orb -->
+    <circle cx="256" cy="335" r="28" fill="#00f0ff" opacity="0.9" filter="url(#glow)"/>
+    <circle cx="256" cy="335" r="14" fill="#ffffff"/>
+  </g>
+</svg>

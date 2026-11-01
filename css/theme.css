@@ -1,0 +1,158 @@
+/**
+ * Antigravity PWA - Dark OLED Design System & Theme Tokens
+ * Persian Typography (Vazirmatn) + Glassmorphism + ANSI Terminal Colors
+ */
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* OLED Pitch Black & Surfaces */
+  --bg-oled: #000000;
+  --bg-surface: #060709;
+  --bg-surface-elevated: #0d0f14;
+  --bg-glass: rgba(10, 12, 18, 0.75);
+  --bg-glass-card: rgba(14, 18, 26, 0.65);
+  --bg-glass-active: rgba(22, 28, 40, 0.85);
+
+  /* Glassmorphism Borders */
+  --border-glass: rgba(255, 255, 255, 0.08);
+  --border-glass-subtle: rgba(255, 255, 255, 0.04);
+  --border-glass-hover: rgba(0, 240, 255, 0.4);
+  --border-glass-active: rgba(0, 255, 157, 0.5);
+
+  /* Neon Accents */
+  --color-cyan: #00f0ff;
+  --color-cyan-glow: rgba(0, 240, 255, 0.3);
+  --color-emerald: #00ff9d;
+  --color-emerald-glow: rgba(0, 255, 157, 0.25);
+  --color-violet: #a855f7;
+  --color-violet-glow: rgba(168, 85, 247, 0.3);
+  --color-amber: #ffb800;
+  --color-amber-glow: rgba(255, 184, 0, 0.25);
+  --color-coral: #ff4757;
+  --color-coral-glow: rgba(255, 71, 87, 0.3);
+
+  /* Text & Typography */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-dim: #475569;
+
+  /* Font Stacks */
+  --font-persian: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, Monaco, Consolas, monospace;
+  --terminal-font-size: 13.5px;
+  --terminal-line-height: 1.6;
+
+  /* Glass Filter & Radius */
+  --blur-glass: blur(20px);
+  --blur-subtle: blur(12px);
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+
+  /* Glowing Shadows */
+  --glow-sm: 0 0 10px rgba(0, 240, 255, 0.2);
+  --glow-md: 0 0 24px rgba(0, 240, 255, 0.25);
+  --glow-emerald-sm: 0 0 12px rgba(0, 255, 157, 0.3);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.85);
+
+  /* ANSI Terminal 16-Color Palette (Optimized for OLED) */
+  --ansi-black: #12141a;
+  --ansi-red: #ff5566;
+  --ansi-green: #00ff9d;
+  --ansi-yellow: #ffcf40;
+  --ansi-blue: #38bdf8;
+  --ansi-magenta: #c084fc;
+  --ansi-cyan: #00f0ff;
+  --ansi-white: #e2e8f0;
+  --ansi-bright-black: #475569;
+  --ansi-bright-red: #ff7788;
+  --ansi-bright-green: #34d399;
+  --ansi-bright-yellow: #fde047;
+  --ansi-bright-blue: #60a5fa;
+  --ansi-bright-magenta: #d8b4fe;
+  --ansi-bright-cyan: #67e8f9;
+  --ansi-bright-white: #ffffff;
+
+  /* Safe Area Insets for Mobile/Notch */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* CSS Resets & Base Styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-oled);
+  color: var(--text-primary);
+  font-family: var(--font-persian);
+  direction: rtl;
+  text-align: right;
+  font-feature-settings: "ss01", "ss02", "cv01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+input, textarea, button, select {
+  font-family: inherit;
+  color: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* OLED Deep Dark Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 240, 255, 0.4);
+}

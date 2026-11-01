@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs & Runtime
+server.log
+*.log
+*.tmp
+*.bak
+
+# Personal & Runtime Sensitive Data
+chat_history.json
+auth_config.json
+.env
+.system_generated/
+
+# OS Specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Virtual Environments
+env/
+venv/
+.venv/
+ENV/
+
+# IDE & Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

@@ -1,0 +1,2709 @@
+/**
+ * Antigravity Desktop-Style Mobile Web PWA Client
+ * Pure JavaScript, Offline Ready, Markdown Streaming, Code Copy
+ * Full Implementation of 5 Core Features
+ */
+
+(function () {
+  'use strict';
+
+  // State
+  let ws = null;
+  let activeChatId = null;
+  let chats = {};
+  let currentModel = 'gemini-3.8-flash-high';
+  let currentEffort = 'high';
+  let currentMode = 'auto';
+  let availableModels = [];
+  let workspaceDir = '~';
+  let isWsConnected = false;
+  let isInternetOnline = navigator.onLine !== false;
+  let activeStreamingBubble = null;
+  let currentStreamText = '';
+
+  // Auth State
+  let authToken = localStorage.getItem('anti_auth_token') || sessionStorage.getItem('anti_auth_token') || null;
+  let currentUser = localStorage.getItem('anti_username') || sessionStorage.getItem('anti_username') || 'admin';
+  let isAuthenticated = false;
+
+  // Active Turn Steps, Thinking & Timers
+  let currentAccordionEl = null;
+  let currentMiniTerminals = {}; // step_index -> { element, timerInterval, startTime }
+  let activeTurnStepIndices = new Set();
+  let liveThinkingEl = null;
+  let liveThinkingTimer = null;
+  let liveThinkingStartTime = 0;
+  let liveTurnMeta = null;
+  let cachedMentions = [];
+  let slashSelectedIdx = 0;
+  let mentionSelectedIdx = 0;
+
+  // Inspect Process State
+  let currentInspectingPid = null;
+
+  // File Explorer State
+  let currentFilesPath = '';
+
+  // DOM Elements
+  const authLoginModal = document.getElementById('authLoginModal');
+  const authLoginForm = document.getElementById('authLoginForm');
+  const authUsername = document.getElementById('authUsername');
+  const authPassword = document.getElementById('authPassword');
+  const authRememberMe = document.getElementById('authRememberMe');
+  const authAlertBanner = document.getElementById('authAlertBanner');
+  const btnAuthSubmit = document.getElementById('btnAuthSubmit');
+  const authBtnText = document.getElementById('authBtnText');
+  const authSubmitSpinner = document.getElementById('authSubmitSpinner');
+  const btnToggleAuthPassword = document.getElementById('btnToggleAuthPassword');
+  const drawerUserCard = document.getElementById('drawerUserCard');
+  const drawerUserName = document.getElementById('drawerUserName');
+  const drawerUserAvatar = document.getElementById('drawerUserAvatar');
+  const btnDrawerLogout = document.getElementById('btnDrawerLogout');
+  const btnOpenChangePassword = document.getElementById('btnOpenChangePassword');
+  const changePasswordModal = document.getElementById('changePasswordModal');
+  const btnCloseChangePassword = document.getElementById('btnCloseChangePassword');
+  const changePasswordForm = document.getElementById('changePasswordForm');
+  const changePwdAlert = document.getElementById('changePwdAlert');
+  const cpCurrentPassword = document.getElementById('cpCurrentPassword');
+  const cpNewUsername = document.getElementById('cpNewUsername');
+  const cpNewPassword = document.getElementById('cpNewPassword');
+
+  const headerStatusDot = document.getElementById('headerStatusDot');
+  const headerModelText = document.getElementById('headerModelText');
+  const pillModel = document.getElementById('pillModel');
+  const pillModelText = document.getElementById('pillModelText');
+  const pillEffort = document.getElementById('pillEffort');
+  const pillEffortText = document.getElementById('pillEffortText');
+  const pillMode = document.getElementById('pillMode');
+  const pillModeText = document.getElementById('pillModeText');
+  const pingValText = document.getElementById('pingValText');
+  const pingDot = document.getElementById('pingDot');
+  const btnMic = document.getElementById('btnMic');
+  const slashPopover = document.getElementById('slashPopover');
+  const mentionsPopover = document.getElementById('mentionsPopover');
+  const modelSheetBackdrop = document.getElementById('modelSheetBackdrop');
+  const modelSheetBody = document.getElementById('modelSheetBody');
+  const btnCloseModelSheet = document.getElementById('btnCloseModelSheet');
+
+  const btnNewChat = document.getElementById('btnNewChat');
+  const btnMenu = document.getElementById('btnMenu');
+  const btnCloseDrawer = document.getElementById('btnCloseDrawer');
+  const drawerBackdrop = document.getElementById('drawerBackdrop');
+  const btnDrawerNewChat = document.getElementById('btnDrawerNewChat');
+  const chatsList = document.getElementById('chatsList');
+  const modelSelect = document.getElementById('modelSelect');
+  const workspacePathText = document.getElementById('workspacePathText');
+  const chatScrollArea = document.getElementById('chatScrollArea');
+  const chatInner = document.getElementById('chatInner');
+  const emptyState = document.getElementById('emptyState');
+  const thinkingRow = document.getElementById('thinkingRow');
+  const thinkingText = document.getElementById('thinkingText');
+  const inputMessage = document.getElementById('inputMessage');
+  const btnSend = document.getElementById('btnSend');
+  const btnToggleKeys = document.getElementById('btnToggleKeys');
+  const extraKeysRow = document.getElementById('extraKeysRow');
+
+  // Network Banners
+  const networkWarningBanner = document.getElementById('networkWarningBanner');
+  const serverErrorBanner = document.getElementById('serverErrorBanner');
+  const btnBannerRestart = document.getElementById('btnBannerRestart');
+
+  // Header and Drawer Navigation
+  const btnOpenFiles = document.getElementById('btnOpenFiles');
+  const btnOpenProcesses = document.getElementById('btnOpenProcesses');
+  const procBadgeHeader = document.getElementById('procBadgeHeader');
+  const procBadgeDrawer = document.getElementById('procBadgeDrawer');
+  const btnDrawerProcesses = document.getElementById('btnDrawerProcesses');
+  const btnDrawerFiles = document.getElementById('btnDrawerFiles');
+  const btnDrawerRestart = document.getElementById('btnDrawerRestart');
+
+  // Processes Modal Elements
+  const processesModal = document.getElementById('processesModal');
+  const procModalBadge = document.getElementById('procModalBadge');
+  const btnRefreshProcesses = document.getElementById('btnRefreshProcesses');
+  const btnCloseProcesses = document.getElementById('btnCloseProcesses');
+  const processesListContainer = document.getElementById('processesListContainer');
+
+  // Inspect Process Modal Elements
+  const inspectProcessModal = document.getElementById('inspectProcessModal');
+  const inspectTitle = document.getElementById('inspectTitle');
+  const btnCloseInspect = document.getElementById('btnCloseInspect');
+  const inspectInfoBar = document.getElementById('inspectInfoBar');
+  const inspectTerminalScreen = document.getElementById('inspectTerminalScreen');
+  const inspectTerminalOutput = document.getElementById('inspectTerminalOutput');
+  const inspectStdinInput = document.getElementById('inspectStdinInput');
+  const btnSendInspectStdin = document.getElementById('btnSendInspectStdin');
+  const btnSignalSigint = document.getElementById('btnSignalSigint');
+  const btnSignalSigterm = document.getElementById('btnSignalSigterm');
+  const btnSignalSigkill = document.getElementById('btnSignalSigkill');
+
+  // Files Modal Elements
+  const filesModal = document.getElementById('filesModal');
+  const btnCloseFiles = document.getElementById('btnCloseFiles');
+  const btnFilesUp = document.getElementById('btnFilesUp');
+  const filesBreadcrumbs = document.getElementById('filesBreadcrumbs');
+  const filesListContainer = document.getElementById('filesListContainer');
+
+  // Code Viewer Modal Elements
+  const codeViewerModal = document.getElementById('codeViewerModal');
+  const codeViewerTitle = document.getElementById('codeViewerTitle');
+  const codeViewerLang = document.getElementById('codeViewerLang');
+  const btnCodeCopy = document.getElementById('btnCodeCopy');
+  const btnCodeDownload = document.getElementById('btnCodeDownload');
+  const btnCodeMention = document.getElementById('btnCodeMention');
+  const btnCloseCodeViewer = document.getElementById('btnCloseCodeViewer');
+  const codeLineNumbers = document.getElementById('codeLineNumbers');
+  const codeHighlighted = document.getElementById('codeHighlighted');
+  let currentViewedFilePath = '';
+  let currentViewedFileContent = '';
+
+  // Configure Marked with Highlight.js
+  if (typeof marked !== 'undefined') {
+    const renderer = new marked.Renderer();
+
+    renderer.code = function (code, lang) {
+      const language = lang || 'text';
+      let highlighted = code;
+      if (typeof hljs !== 'undefined') {
+        try {
+          if (lang && hljs.getLanguage(lang)) {
+            highlighted = hljs.highlight(code, { language: lang }).value;
+          } else {
+            highlighted = hljs.highlightAuto(code).value;
+          }
+        } catch (e) {
+          highlighted = code;
+        }
+      }
+
+      const escapedCode = encodeURIComponent(code);
+
+      return `
+        <div class="code-container">
+          <div class="code-header">
+            <span class="code-lang">${language}</span>
+            <button class="code-copy-btn" data-code="${escapedCode}" onclick="window.copyCode(this)">کپی</button>
+          </div>
+          <pre><code class="hljs language-${language}">${highlighted}</code></pre>
+        </div>
+      `;
+    };
+
+    renderer.blockquote = function (quote) {
+      const clean = quote.trim();
+      const alertMap = [
+        { tag: '[!NOTE]', type: 'note', title: 'یادداشت', icon: 'ℹ️' },
+        { tag: '[!TIP]', type: 'tip', title: 'نکته', icon: '💡' },
+        { tag: '[!IMPORTANT]', type: 'important', title: 'مهم', icon: '⚡' },
+        { tag: '[!WARNING]', type: 'warning', title: 'هشدار', icon: '⚠️' },
+        { tag: '[!CAUTION]', type: 'caution', title: 'احتیاط', icon: '🛑' }
+      ];
+      for (const a of alertMap) {
+        if (clean.includes(a.tag)) {
+          const content = clean.replace(a.tag, '').replace(/<p>\s*<\/p>/g, '');
+          return `
+            <div class="antigravity-alert ${a.type}">
+              <div class="alert-title">${a.icon} ${a.title}</div>
+              <div class="alert-content">${content}</div>
+            </div>
+          `;
+        }
+      }
+      return `<blockquote>${quote}</blockquote>`;
+    };
+
+    renderer.link = function (href, title, text) {
+      if (href && href.startsWith('file://')) {
+        const filePath = href.replace('file://', '');
+        const fName = filePath.split('/').pop();
+        return `<a href="#" class="file-mention-link" data-path="${filePath}" onclick="window.handleFileLinkClick(event, this)">📄 ${text || fName}</a>`;
+      }
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    };
+
+    marked.setOptions({
+      renderer: renderer,
+      breaks: true,
+      gfm: true
+    });
+  }
+
+  // Global File Link Handler
+  window.handleFileLinkClick = function (e, el) {
+    e.preventDefault();
+    const path = el.getAttribute('data-path');
+    if (path) {
+      openCodeViewer(path);
+    }
+  };
+
+  // Global Code Copy Function
+  window.copyCode = function (button) {
+    const raw = button.getAttribute('data-code');
+    const text = decodeURIComponent(raw);
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = button.innerText;
+      button.innerText = 'کپی شد';
+      button.style.color = '#10b981';
+      setTimeout(() => {
+        button.innerText = orig;
+        button.style.color = '';
+      }, 2000);
+    }).catch(err => {
+      console.error('Failed to copy', err);
+    });
+  };
+
+  // LocalStorage Helpers
+  function saveToLocalStorage() {
+    try {
+      localStorage.setItem('agy_chats_v2', JSON.stringify(chats));
+      localStorage.setItem('agy_active_chat_id', activeChatId || '');
+      localStorage.setItem('agy_current_model', currentModel || '');
+    } catch (e) {
+      console.warn('LocalStorage save failed:', e);
+    }
+  }
+
+  function loadFromLocalStorage() {
+    try {
+      const storedChats = localStorage.getItem('agy_chats_v2');
+      if (storedChats) {
+        chats = JSON.parse(storedChats);
+      }
+      activeChatId = localStorage.getItem('agy_active_chat_id') || activeChatId;
+      currentModel = localStorage.getItem('agy_current_model') || currentModel;
+    } catch (e) {
+      console.warn('LocalStorage load failed:', e);
+    }
+  }
+
+  // Format Persian / Relative Time
+  function formatTimestamp(ts) {
+    if (!ts) return '';
+    const date = new Date(ts * 1000);
+    return date.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Auto-scroll chat area
+  function scrollToBottom(force = false) {
+    if (!chatScrollArea) return;
+    const isNearBottom = chatScrollArea.scrollHeight - chatScrollArea.scrollTop - chatScrollArea.clientHeight < 160;
+    if (force || isNearBottom) {
+      chatScrollArea.scrollTop = chatScrollArea.scrollHeight;
+    }
+  }
+
+  // =========================================================================
+  // Feature 5: Network Status Indicator & Watchdog
+  // =========================================================================
+  function updateNetworkStatus() {
+    if (!isWsConnected) {
+      // Red: Disconnected from local server
+      if (headerStatusDot) {
+        headerStatusDot.className = 'status-dot disconnected';
+        headerStatusDot.title = 'ارتباط با سرور ترموکس قطع است';
+      }
+      if (serverErrorBanner) serverErrorBanner.classList.add('show');
+      if (networkWarningBanner) networkWarningBanner.classList.remove('show');
+    } else if (!isInternetOnline) {
+      // Yellow: Local server connected, but internet offline
+      if (headerStatusDot) {
+        headerStatusDot.className = 'status-dot warning';
+        headerStatusDot.title = 'سرور متصل است، اما اینترنت قطع است';
+      }
+      if (networkWarningBanner) networkWarningBanner.classList.add('show');
+      if (serverErrorBanner) serverErrorBanner.classList.remove('show');
+    } else {
+      // Green: Local server connected and internet online
+      if (headerStatusDot) {
+        headerStatusDot.className = 'status-dot connected';
+        headerStatusDot.title = 'اتصال برقرار است (سرور و اینترنت فعال)';
+      }
+      if (networkWarningBanner) networkWarningBanner.classList.remove('show');
+      if (serverErrorBanner) serverErrorBanner.classList.remove('show');
+    }
+  }
+
+  // Listen to browser online/offline events
+  window.addEventListener('online', () => {
+    isInternetOnline = true;
+    updateNetworkStatus();
+  });
+
+  window.addEventListener('offline', () => {
+    isInternetOnline = false;
+    updateNetworkStatus();
+  });
+
+  // Auth Fetch Wrapper with automatic bearer header and 401 interception
+  async function authFetch(url, options = {}) {
+    options.headers = options.headers || {};
+    if (authToken) {
+      if (options.headers instanceof Headers) {
+        options.headers.set('Authorization', `Bearer ${authToken}`);
+      } else {
+        options.headers['Authorization'] = `Bearer ${authToken}`;
+      }
+    }
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+      isAuthenticated = false;
+      showLoginModal('احراز هویت الزامی است یا نشست شما منقضی شده است.');
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.close(4401); } catch (e) {}
+      }
+      throw new Error('Unauthorized');
+    }
+    return res;
+  }
+
+  // Feature 0: Authentication UI Handlers
+  function showLoginModal(errorMsg = '') {
+    if (!authLoginModal) return;
+    authLoginModal.classList.add('active');
+    if (errorMsg) {
+      if (authAlertBanner) {
+        authAlertBanner.textContent = errorMsg;
+        authAlertBanner.className = 'auth-alert';
+        authAlertBanner.style.display = 'block';
+      }
+    } else if (authAlertBanner) {
+      authAlertBanner.style.display = 'none';
+    }
+    if (authPassword) {
+      authPassword.value = '';
+      setTimeout(() => authPassword.focus(), 150);
+    }
+  }
+
+  function hideLoginModal() {
+    if (!authLoginModal) return;
+    authLoginModal.classList.remove('active');
+    if (authAlertBanner) authAlertBanner.style.display = 'none';
+  }
+
+  function updateUserInfoUI(username) {
+    currentUser = username || 'admin';
+    if (drawerUserName) drawerUserName.textContent = currentUser;
+    if (drawerUserAvatar) drawerUserAvatar.textContent = currentUser.charAt(0).toUpperCase();
+  }
+
+  async function checkAuthStatus() {
+    try {
+      const headers = {};
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      const res = await fetch('/api/auth/status', { headers });
+      const data = await res.json();
+      if (data && data.authenticated) {
+        isAuthenticated = true;
+        updateUserInfoUI(data.username);
+        hideLoginModal();
+        return true;
+      } else {
+        isAuthenticated = false;
+        showLoginModal();
+        return false;
+      }
+    } catch (err) {
+      console.warn('[Auth] Status check failed:', err);
+      showLoginModal();
+      return false;
+    }
+  }
+
+  async function handleLoginSubmit() {
+    const user = authUsername ? authUsername.value.trim() : 'admin';
+    const pwd = authPassword ? authPassword.value : '';
+    const remember = authRememberMe ? authRememberMe.checked : true;
+
+    if (!user || !pwd) {
+      if (authAlertBanner) {
+        authAlertBanner.textContent = 'لطفاً نام کاربری و رمز عبور را وارد کنید.';
+        authAlertBanner.className = 'auth-alert';
+        authAlertBanner.style.display = 'block';
+      }
+      return;
+    }
+
+    if (btnAuthSubmit) btnAuthSubmit.disabled = true;
+    if (authSubmitSpinner) authSubmitSpinner.style.display = 'block';
+    if (authBtnText) authBtnText.textContent = 'در حال بررسی...';
+    if (authAlertBanner) authAlertBanner.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user, password: pwd, remember })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        authToken = data.token;
+        currentUser = data.username || user;
+        isAuthenticated = true;
+
+        if (remember) {
+          localStorage.setItem('anti_auth_token', authToken);
+          localStorage.setItem('anti_username', currentUser);
+        } else {
+          sessionStorage.setItem('anti_auth_token', authToken);
+          sessionStorage.setItem('anti_username', currentUser);
+        }
+
+        updateUserInfoUI(currentUser);
+        hideLoginModal();
+
+        // Connect and load user data
+        connectWebSocket();
+        fetchServerChats();
+        fetchModels();
+        fetchWorkspace();
+        fetchProcesses();
+        fetchMentions();
+      } else {
+        if (authAlertBanner) {
+          authAlertBanner.textContent = data.error || 'نام کاربری یا رمز عبور نامعتبر است.';
+          authAlertBanner.className = 'auth-alert';
+          authAlertBanner.style.display = 'block';
+        }
+        if (authPassword) authPassword.focus();
+      }
+    } catch (err) {
+      if (authAlertBanner) {
+        authAlertBanner.textContent = 'خطا در ارتباط با سرور. لطفاً اتصال را بررسی کنید.';
+        authAlertBanner.className = 'auth-alert';
+        authAlertBanner.style.display = 'block';
+      }
+    } finally {
+      if (btnAuthSubmit) btnAuthSubmit.disabled = false;
+      if (authSubmitSpinner) authSubmitSpinner.style.display = 'none';
+      if (authBtnText) authBtnText.textContent = 'ورود به سیستم';
+    }
+  }
+
+  async function handleLogout() {
+    if (!confirm('آیا مایلید از حساب کاربری خود خارج شوید؟')) return;
+
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
+    } catch (e) {}
+
+    authToken = null;
+    isAuthenticated = false;
+    localStorage.removeItem('anti_auth_token');
+    localStorage.removeItem('anti_username');
+    sessionStorage.removeItem('anti_auth_token');
+    sessionStorage.removeItem('anti_username');
+
+    if (ws) {
+      try { ws.close(); } catch (e) {}
+    }
+
+    closeDrawer();
+    showLoginModal('با موفقیت از سیستم خارج شدید.');
+  }
+
+  // Periodic Health Check
+  async function checkHealth() {
+    try {
+      const res = await fetch('/api/health');
+      if (res.ok) {
+        const data = await res.json();
+        isInternetOnline = (data.internet_ok || navigator.onLine);
+        if (data.processes_count !== undefined) {
+          updateProcessBadge(data.processes_count);
+        }
+      }
+    } catch (e) {
+      // Server might be down
+    }
+    updateNetworkStatus();
+  }
+
+  // Restart Engine Function
+  async function restartEngine() {
+    if (btnBannerRestart) btnBannerRestart.disabled = true;
+    if (btnDrawerRestart) btnDrawerRestart.disabled = true;
+
+    try {
+      const res = await authFetch('/api/restart', { method: 'POST' });
+      const data = await res.json();
+      appendMessageBubble('assistant', `🔄 **راه‌اندازی مجدد:** ${data.message || 'موتور با موفقیت ریستارت شد.'}`, Date.now() / 1000, true);
+    } catch (e) {
+      appendMessageBubble('assistant', `⚠️ **خطا در راه‌اندازی مجدد:** ${e.message}`, Date.now() / 1000, true);
+    } finally {
+      if (btnBannerRestart) btnBannerRestart.disabled = false;
+      if (btnDrawerRestart) btnDrawerRestart.disabled = false;
+      closeDrawer();
+      fetchProcesses();
+    }
+  }
+
+  // Update Badge in header and drawer
+  function updateProcessBadge(count) {
+    const val = count || 0;
+    if (procBadgeHeader) procBadgeHeader.textContent = val;
+    if (procBadgeDrawer) procBadgeDrawer.textContent = val;
+    if (procModalBadge) procModalBadge.textContent = val;
+  }
+
+  // Utility: HTML Escaping
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // Utility: Haptic Feedback on supported mobile browsers
+  function triggerHaptic(ms = 15) {
+    if (navigator.vibrate) {
+      try { navigator.vibrate(ms); } catch (e) {}
+    }
+  }
+
+  // Create Antigravity Thinking Accordion Element
+  function createThinkingAccordion(thinkingText, duration, tokens, isLive = false) {
+    const accordion = document.createElement('div');
+    accordion.className = `thinking-accordion ${isLive ? 'expanded pulse-active' : ''}`;
+    
+    let durStr = '';
+    if (duration) durStr = `${duration}s`;
+    else if (isLive) durStr = 'در حال تحلیل...';
+    
+    const tokStr = tokens ? ` • ${tokens} توکن` : '';
+    const badgeText = `${durStr}${tokStr}`;
+
+    accordion.innerHTML = `
+      <div class="thinking-header">
+        <div class="thinking-title-wrap">
+          <span class="thinking-icon">${isLive ? '🧠' : '💡'}</span>
+          <span>${isLive ? 'در حال تفکر و پردازش...' : 'فرایند تفکر ایجنت (Thinking Process)'}</span>
+        </div>
+        <div class="thinking-meta-wrap">
+          <span class="thinking-badge">${badgeText}</span>
+          <svg class="thinking-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+      </div>
+      <div class="thinking-body">${escapeHtml(thinkingText || '')}</div>
+    `;
+
+    const header = accordion.querySelector('.thinking-header');
+    header.addEventListener('click', () => {
+      triggerHaptic(10);
+      accordion.classList.toggle('expanded');
+    });
+
+    return accordion;
+  }
+
+  // Create Antigravity Action Steps Accordion
+  function createStepsAccordion(steps) {
+    const accordion = document.createElement('div');
+    accordion.className = 'activity-accordion';
+    const count = Array.isArray(steps) ? steps.length : 0;
+
+    accordion.innerHTML = `
+      <div class="accordion-header">
+        <div class="accordion-summary">
+          <span class="accordion-icon">⚡</span>
+          <span class="accordion-title">عملیات و ابزارهای اجرا شده (${count} گام)</span>
+        </div>
+        <div class="accordion-meta-wrap">
+          <span class="accordion-badge">تکمیل شده</span>
+          <svg class="accordion-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+      </div>
+      <div class="accordion-content"></div>
+    `;
+
+    const content = accordion.querySelector('.accordion-content');
+    if (Array.isArray(steps)) {
+      steps.forEach(step => {
+        const stepEl = document.createElement('div');
+        stepEl.className = 'step-item';
+        stepEl.innerHTML = `
+          <div class="step-row">
+            <div class="step-title-wrap">
+              <span class="step-status-icon">✓</span>
+              <span class="step-text">${step.icon || '•'} ${escapeHtml(step.title || step.tool)}</span>
+            </div>
+            <span class="step-duration">${step.duration || 0}s</span>
+          </div>
+        `;
+        if (step.output) {
+          const outBox = document.createElement('div');
+          outBox.className = 'mini-terminal';
+          outBox.innerHTML = `
+            <div class="mini-terminal-header">
+              <span class="mini-terminal-cmd">${escapeHtml(step.command || step.tool)}</span>
+            </div>
+            <div class="mini-terminal-body" style="max-height: 180px;">${escapeHtml(step.output)}</div>
+          `;
+          stepEl.appendChild(outBox);
+        }
+        content.appendChild(stepEl);
+      });
+    }
+
+    const header = accordion.querySelector('.accordion-header');
+    header.addEventListener('click', () => {
+      triggerHaptic(10);
+      accordion.classList.toggle('expanded');
+    });
+
+    return accordion;
+  }
+
+  // =========================================================================
+  // Render Messages for Current Chat
+  // =========================================================================
+  function renderMessages() {
+    if (!chatInner) return;
+    chatInner.innerHTML = '';
+    currentAccordionEl = null;
+    currentMiniTerminals = {};
+    activeTurnStepIndices.clear();
+
+    const chat = chats[activeChatId];
+    if (!chat || !chat.messages || chat.messages.length === 0) {
+      if (emptyState) emptyState.style.display = 'flex';
+      return;
+    }
+
+    if (emptyState) emptyState.style.display = 'none';
+
+    chat.messages.forEach(msg => {
+      appendMessageBubble(msg.role, msg.content, msg.timestamp, false, false, msg.meta);
+    });
+
+    scrollToBottom(true);
+  }
+
+  // Append a single message bubble to DOM
+  function appendMessageBubble(role, content, timestamp, shouldScroll = true, isError = false, meta = null) {
+    if (emptyState) emptyState.style.display = 'none';
+
+    const row = document.createElement('div');
+    row.className = `msg-row ${role}`;
+
+    if (role === 'user') {
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble user-bubble';
+      bubble.setAttribute('dir', 'auto');
+
+      const p = document.createElement('p');
+      p.style.whiteSpace = 'pre-wrap';
+      p.textContent = content;
+      bubble.appendChild(p);
+
+      // Add retry button under user message
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'msg-retry-btn';
+      retryBtn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="1 4 1 10 7 10"></polyline>
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+        </svg>
+        تلاش مجدد
+      `;
+      retryBtn.onclick = () => {
+        retryMessage(content);
+      };
+      bubble.appendChild(retryBtn);
+
+      if (timestamp) {
+        const metaSpan = document.createElement('span');
+        metaSpan.className = 'msg-meta';
+        metaSpan.textContent = formatTimestamp(timestamp);
+        bubble.appendChild(metaSpan);
+      }
+
+      row.appendChild(bubble);
+    } else {
+      // 1. Assistant Header
+      const header = document.createElement('div');
+      header.className = 'assistant-header';
+      const modelName = (meta && meta.model) || currentModel;
+      header.innerHTML = `
+        <div class="assistant-avatar">⚡</div>
+        <span class="assistant-name">Antigravity</span>
+        <span class="assistant-model-tag">${escapeHtml(modelName)}</span>
+        <span class="msg-meta" style="margin-right:auto;">${formatTimestamp(timestamp || Date.now() / 1000)}</span>
+      `;
+      row.appendChild(header);
+
+      // 2. Thinking Accordion (if meta.thinking exists)
+      if (meta && meta.thinking) {
+        const thinkEl = createThinkingAccordion(meta.thinking, meta.duration, meta.thinking_tokens);
+        row.appendChild(thinkEl);
+      }
+
+      // 3. Actions / Steps Accordion (if meta.steps exists and has items)
+      if (meta && meta.steps && meta.steps.length > 0) {
+        const stepsEl = createStepsAccordion(meta.steps);
+        row.appendChild(stepsEl);
+      }
+
+      // 4. Message Bubble Body
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble ai-bubble';
+      bubble.setAttribute('dir', 'auto');
+
+      if (typeof marked !== 'undefined') {
+        bubble.innerHTML = marked.parse(content || '');
+      } else {
+        bubble.textContent = content || '';
+      }
+
+      if (isError) {
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'msg-retry-btn';
+        retryBtn.innerHTML = `↻ تلاش مجدد`;
+        retryBtn.onclick = () => {
+          const chat = chats[activeChatId];
+          if (chat && chat.messages.length > 1) {
+            const lastUserMsg = [...chat.messages].reverse().find(m => m.role === 'user');
+            if (lastUserMsg) retryMessage(lastUserMsg.content);
+          }
+        };
+        bubble.appendChild(retryBtn);
+      }
+
+      row.appendChild(bubble);
+    }
+
+    chatInner.appendChild(row);
+
+    if (shouldScroll) {
+      scrollToBottom(true);
+    }
+
+    return row.querySelector('.ai-bubble') || row;
+  }
+
+  // Retry Message Function (Feature 5.3)
+  function retryMessage(promptText) {
+    if (!promptText) return;
+    if (inputMessage) {
+      inputMessage.value = promptText;
+      inputMessage.dispatchEvent(new Event('input'));
+      sendMessage();
+    }
+  }
+
+  // =========================================================================
+  // Feature 1: Live Step-by-Step Activity Accordion & Real-time Command Preview
+  // =========================================================================
+  function getOrCreateAccordion() {
+    if (currentAccordionEl && document.body.contains(currentAccordionEl)) {
+      return currentAccordionEl;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'msg-row assistant';
+    row.style.marginBottom = '4px';
+
+    const accordion = document.createElement('div');
+    accordion.className = 'activity-accordion expanded';
+
+    accordion.innerHTML = `
+      <div class="accordion-header">
+        <div class="accordion-summary">
+          <span class="accordion-icon">⚙️</span>
+          <span class="accordion-title">مراحل پردازش هوش مصنوعی...</span>
+        </div>
+        <div class="accordion-meta-wrap">
+          <span class="accordion-badge">زنده</span>
+          <svg class="accordion-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+      </div>
+      <div class="accordion-content"></div>
+    `;
+
+    // Click header to toggle collapse
+    accordion.querySelector('.accordion-header').addEventListener('click', () => {
+      accordion.classList.toggle('expanded');
+    });
+
+    row.appendChild(accordion);
+    chatInner.appendChild(row);
+    currentAccordionEl = accordion;
+    scrollToBottom();
+
+    return currentAccordionEl;
+  }
+
+  function handleStepStart(data) {
+    const accordion = getOrCreateAccordion();
+    const content = accordion.querySelector('.accordion-content');
+    const titleEl = accordion.querySelector('.accordion-title');
+    const iconEl = accordion.querySelector('.accordion-icon');
+
+    if (titleEl && data.title) titleEl.textContent = data.title;
+    if (iconEl && data.icon) iconEl.textContent = data.icon;
+
+    const stepIndex = data.step_index;
+    activeTurnStepIndices.add(stepIndex);
+
+    let stepItem = content.querySelector(`[data-step="${stepIndex}"]`);
+    if (!stepItem) {
+      stepItem = document.createElement('div');
+      stepItem.className = 'step-item';
+      stepItem.setAttribute('data-step', stepIndex);
+
+      stepItem.innerHTML = `
+        <div class="step-row">
+          <div class="step-title-wrap">
+            <span class="step-status-icon active">
+              <span class="spinner-icon"></span>
+            </span>
+            <span class="step-text">${data.icon || '•'} ${data.title || data.tool_name}</span>
+          </div>
+          <span class="step-duration" id="stepTimer_${stepIndex}">0.0s</span>
+        </div>
+      `;
+      content.appendChild(stepItem);
+    }
+
+    // Live Command Execution Preview Box (Feature 1.3)
+    if (data.is_command && data.command) {
+      let miniTerm = stepItem.querySelector('.mini-terminal');
+      if (!miniTerm) {
+        miniTerm = document.createElement('div');
+        miniTerm.className = 'mini-terminal';
+        miniTerm.innerHTML = `
+          <div class="mini-terminal-header">
+            <span class="mini-terminal-cmd">$ ${data.command}</span>
+            <button class="mini-terminal-kill-btn" data-step="${stepIndex}">⏹ توقف (Kill)</button>
+          </div>
+          <div class="mini-terminal-body" id="termBody_${stepIndex}"></div>
+          <div class="mini-terminal-footer">
+            <span class="terminal-status">در حال اجرا...</span>
+            <span class="terminal-timer" id="termTimer_${stepIndex}">0.0s</span>
+          </div>
+        `;
+
+        // Kill Button Handler
+        const killBtn = miniTerm.querySelector('.mini-terminal-kill-btn');
+        killBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          killCommand(stepIndex);
+        });
+
+        stepItem.appendChild(miniTerm);
+
+        // Start elapsed timer
+        const startTime = Date.now();
+        const timerInterval = setInterval(() => {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          const tTimer = document.getElementById(`termTimer_${stepIndex}`);
+          const sTimer = document.getElementById(`stepTimer_${stepIndex}`);
+          if (tTimer) tTimer.textContent = `${elapsed}s`;
+          if (sTimer) sTimer.textContent = `${elapsed}s`;
+        }, 100);
+
+        currentMiniTerminals[stepIndex] = {
+          element: miniTerm,
+          timerInterval: timerInterval,
+          startTime: startTime
+        };
+      }
+    }
+
+    scrollToBottom();
+  }
+
+  function handleCommandOutput(data) {
+    const stepIndex = data.step_index;
+    const bodyEl = document.getElementById(`termBody_${stepIndex}`);
+    if (bodyEl) {
+      const lineSpan = document.createElement('div');
+      lineSpan.textContent = data.line;
+      if (data.is_err) lineSpan.style.color = '#f87171';
+      bodyEl.appendChild(lineSpan);
+      bodyEl.scrollTop = bodyEl.scrollHeight;
+      scrollToBottom();
+    }
+  }
+
+  function handleStepDone(data) {
+    const stepIndex = data.step_index;
+    const accordion = currentAccordionEl;
+    if (accordion) {
+      const stepItem = accordion.querySelector(`[data-step="${stepIndex}"]`);
+      if (stepItem) {
+        const iconContainer = stepItem.querySelector('.step-status-icon');
+        if (iconContainer) {
+          iconContainer.className = 'step-status-icon';
+          iconContainer.textContent = '✓';
+        }
+        const sTimer = document.getElementById(`stepTimer_${stepIndex}`);
+        if (sTimer && data.duration !== undefined) {
+          sTimer.textContent = `${data.duration}s`;
+        }
+      }
+    }
+
+    // Stop timer and update mini terminal
+    if (currentMiniTerminals[stepIndex]) {
+      clearInterval(currentMiniTerminals[stepIndex].timerInterval);
+      const miniTerm = currentMiniTerminals[stepIndex].element;
+      if (miniTerm) {
+        const statusEl = miniTerm.querySelector('.terminal-status');
+        if (statusEl) statusEl.textContent = 'تکمیل شد';
+        const killBtn = miniTerm.querySelector('.mini-terminal-kill-btn');
+        if (killBtn) {
+          killBtn.disabled = true;
+          killBtn.style.opacity = '0.4';
+          killBtn.style.cursor = 'default';
+        }
+        // If body is empty, inject final output
+        const bodyEl = document.getElementById(`termBody_${stepIndex}`);
+        if (bodyEl && !bodyEl.textContent.trim() && data.output) {
+          bodyEl.textContent = data.output;
+        }
+      }
+      delete currentMiniTerminals[stepIndex];
+    }
+  }
+
+  // Kill Command via WebSocket
+  function killCommand(stepIndex) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'kill_command',
+        chat_id: activeChatId,
+        step_index: stepIndex
+      }));
+    }
+    const tTimer = document.getElementById(`termTimer_${stepIndex}`);
+    if (tTimer) tTimer.textContent += ' (توقف)';
+  }
+
+  // =========================================================================
+  // Feature 2: Interactive Command & Permission Approval UI
+  // =========================================================================
+  function handlePermissionRequest(data) {
+    if (emptyState) emptyState.style.display = 'none';
+
+    const row = document.createElement('div');
+    row.className = 'msg-row assistant';
+    row.id = `permCard_${data.request_id}`;
+
+    const card = document.createElement('div');
+    card.className = 'action-approval-card';
+    card.setAttribute('dir', 'auto');
+
+    card.innerHTML = `
+      <div class="approval-card-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        </svg>
+        <span>${data.title || 'درخواست تایید اجرای دستور در ترمینال'}</span>
+      </div>
+
+      <div class="approval-card-cmd">$ ${data.command || data.raw_prompt || ''}</div>
+      <div class="approval-card-path">مسیر اجرا: ${data.cwd || workspaceDir}</div>
+
+      <div class="approval-card-actions">
+        <button class="btn-approval allow" data-action="allow">✓ تایید و اجرا (Allow / Yes)</button>
+        <button class="btn-approval always" data-action="always">✓✓ تایید همیشگی (Always Allow)</button>
+        <button class="btn-approval deny" data-action="deny">✕ رد کردن (Deny / No)</button>
+      </div>
+
+      <div class="approval-custom-input-row">
+        <input type="text" class="approval-custom-input" placeholder="ورودی یا پاسخ سفارشی..." dir="auto">
+        <button class="btn-approval custom">ارسال پاسخ</button>
+      </div>
+    `;
+
+    // Handle button clicks
+    const btnAllow = card.querySelector('.btn-approval.allow');
+    const btnAlways = card.querySelector('.btn-approval.always');
+    const btnDeny = card.querySelector('.btn-approval.deny');
+    const btnCustom = card.querySelector('.btn-approval.custom');
+    const customInput = card.querySelector('.approval-custom-input');
+
+    function resolveCard(decision, customVal = '') {
+      // Disable all inputs
+      card.querySelectorAll('button, input').forEach(el => el.disabled = true);
+      
+      const badge = document.createElement('div');
+      if (decision === 'allow' || decision === 'always') {
+        badge.className = 'approval-status-badge allowed';
+        badge.textContent = `✓ مجوز تایید شد (${decision === 'always' ? 'همیشگی' : 'تک‌بار'})`;
+      } else if (decision === 'custom') {
+        badge.className = 'approval-status-badge allowed';
+        badge.textContent = `✓ پاسخ سفارشی ارسال شد: ${customVal}`;
+      } else {
+        badge.className = 'approval-status-badge denied';
+        badge.textContent = '✕ مجوز رد شد';
+      }
+      card.appendChild(badge);
+
+      // Send to WebSocket
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'permission_response',
+          request_id: data.request_id,
+          decision: decision,
+          custom_input: customVal
+        }));
+      }
+    }
+
+    btnAllow.addEventListener('click', () => resolveCard('allow'));
+    btnAlways.addEventListener('click', () => resolveCard('always'));
+    btnDeny.addEventListener('click', () => resolveCard('deny'));
+    btnCustom.addEventListener('click', () => {
+      const val = customInput.value.trim();
+      if (val) resolveCard('custom', val);
+    });
+
+    row.appendChild(card);
+    chatInner.appendChild(row);
+    scrollToBottom(true);
+  }
+
+  // =========================================================================
+  // Feature 3: Background Processes Manager
+  // =========================================================================
+  async function fetchProcesses() {
+    try {
+      const res = await authFetch('/api/processes');
+      if (res.ok) {
+        const data = await res.json();
+        updateProcessBadge(data.count || 0);
+        renderProcessesList(data.processes || []);
+      }
+    } catch (e) {
+      console.warn('Could not fetch processes:', e);
+    }
+  }
+
+  function renderProcessesList(procs) {
+    if (!processesListContainer) return;
+    processesListContainer.innerHTML = '';
+
+    if (!procs || procs.length === 0) {
+      processesListContainer.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">هیچ پروسه‌ای یافت نشد.</div>';
+      return;
+    }
+
+    procs.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'proc-card';
+
+      card.innerHTML = `
+        <div class="proc-header-row">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="proc-pid-badge">PID ${p.pid}</span>
+            <span style="font-weight: 600; font-size: 13px; color: #fff;">${p.name}</span>
+            ${p.is_server ? '<span style="font-size: 10px; background: #262626; color: #10b981; padding: 1px 6px; border-radius: 4px;">سرور اصلی</span>' : ''}
+          </div>
+          ${p.port ? `<span class="proc-port-badge">پورت :${p.port}</span>` : ''}
+        </div>
+
+        <div class="proc-cmd-text">${p.command}</div>
+
+        <div class="proc-meta-row">
+          <span>مصرف پردازنده: ${p.cpu}%</span>
+          <span>حافظه رم: ${p.mem}%</span>
+          <span>مدت فعالیت: ${p.uptime}</span>
+        </div>
+
+        <div class="proc-actions-row">
+          <button class="proc-btn btn-inspect" data-pid="${p.pid}">👁 مشاهده زنده (Inspect)</button>
+          ${!p.is_server ? `<button class="proc-btn danger btn-kill" data-pid="${p.pid}">🗑 بستن پروسه (Kill)</button>` : ''}
+        </div>
+      `;
+
+      card.querySelector('.btn-inspect').addEventListener('click', () => {
+        openInspectModal(p);
+      });
+
+      const killBtn = card.querySelector('.btn-kill');
+      if (killBtn) {
+        killBtn.addEventListener('click', () => {
+          killProcess(p.pid);
+        });
+      }
+
+      processesListContainer.appendChild(card);
+    });
+  }
+
+  async function killProcess(pid, signal = 'SIGTERM') {
+    try {
+      const res = await authFetch(`/api/process-kill/${pid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signal: signal })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchProcesses();
+      }
+    } catch (e) {
+      console.error('Kill error:', e);
+    }
+  }
+
+  function openProcessesModal() {
+    closeDrawer();
+    fetchProcesses();
+    if (processesModal) processesModal.classList.add('open');
+  }
+
+  function closeProcessesModal() {
+    if (processesModal) processesModal.classList.remove('open');
+  }
+
+  // Feature 3.2: Inspect Process Modal
+  async function openInspectModal(proc) {
+    currentInspectingPid = proc.pid;
+    if (inspectTitle) inspectTitle.textContent = `مشاهده زنده: ${proc.name} (PID ${proc.pid})`;
+    if (inspectInfoBar) {
+      inspectInfoBar.innerHTML = `
+        <span>PID: <b>${proc.pid}</b></span>
+        <span>دستور: <b>${proc.name}</b></span>
+        <span>Uptime: <b>${proc.uptime}</b></span>
+      `;
+    }
+    if (inspectTerminalOutput) inspectTerminalOutput.textContent = 'در حال دریافت اطلاعات پروسه...';
+    if (inspectProcessModal) inspectProcessModal.classList.add('open');
+
+    // Subscribe to logs via WS
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'subscribe_process_logs', pid: proc.pid }));
+    }
+
+    try {
+      const res = await authFetch(`/api/process-logs/${proc.pid}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.info && inspectInfoBar) {
+          inspectInfoBar.innerHTML = `
+            <span>وضعیت: <b>${data.info.state || 'اجرا'}</b></span>
+            <span>حافظه: <b>${data.info.vm_rss || '-'}</b></span>
+            <span>مسیر: <b>${data.info.cwd || '-'}</b></span>
+            <span>رشته‌ها: <b>${data.info.threads || '1'}</b></span>
+          `;
+        }
+        if (inspectTerminalOutput) {
+          if (data.logs && data.logs.length > 0) {
+            inspectTerminalOutput.textContent = data.logs.join('\n');
+          } else {
+            inspectTerminalOutput.textContent = `[پروسه فعال است اما خروجی لاگ ثبت نگردیده است]\nCommand: ${proc.command}\nPID: ${proc.pid}`;
+          }
+          if (inspectTerminalScreen) inspectTerminalScreen.scrollTop = inspectTerminalScreen.scrollHeight;
+        }
+      }
+    } catch (e) {
+      if (inspectTerminalOutput) inspectTerminalOutput.textContent = `خطا در دریافت لاگ: ${e.message}`;
+    }
+  }
+
+  function closeInspectModal() {
+    if (currentInspectingPid && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'unsubscribe_process_logs', pid: currentInspectingPid }));
+    }
+    currentInspectingPid = null;
+    if (inspectProcessModal) inspectProcessModal.classList.remove('open');
+  }
+
+  // Send Stdin to Inspected Process
+  async function sendInspectStdin() {
+    if (!currentInspectingPid || !inspectStdinInput) return;
+    const text = inspectStdinInput.value;
+    if (!text) return;
+
+    try {
+      await authFetch(`/api/process-input/${currentInspectingPid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: text })
+      });
+      if (inspectTerminalOutput) {
+        inspectTerminalOutput.textContent += `\n> ${text}\n`;
+        if (inspectTerminalScreen) inspectTerminalScreen.scrollTop = inspectTerminalScreen.scrollHeight;
+      }
+      inspectStdinInput.value = '';
+    } catch (e) {
+      console.warn('Failed to send stdin:', e);
+    }
+  }
+
+  // =========================================================================
+  // Feature 4: Built-in File Explorer & Code Viewer
+  // =========================================================================
+  async function fetchFiles(path = '') {
+    try {
+      const url = path ? `/api/files?path=${encodeURIComponent(path)}` : '/api/files';
+      const res = await authFetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        currentFilesPath = data.current_path;
+        renderBreadcrumbs(data.current_path);
+        renderFilesList(data.items || [], data.parent_path);
+      }
+    } catch (e) {
+      console.warn('Could not fetch files:', e);
+    }
+  }
+
+  function renderBreadcrumbs(fullPath) {
+    if (!filesBreadcrumbs) return;
+    filesBreadcrumbs.innerHTML = '';
+
+    const parts = fullPath.split('/').filter(Boolean);
+    let accum = '';
+
+    const rootBtn = document.createElement('button');
+    rootBtn.className = 'breadcrumb-segment';
+    rootBtn.textContent = '/';
+    rootBtn.onclick = () => fetchFiles('/');
+    filesBreadcrumbs.appendChild(rootBtn);
+
+    parts.forEach((p, idx) => {
+      accum += '/' + p;
+      const target = accum;
+      const sep = document.createElement('span');
+      sep.textContent = '/';
+      sep.style.color = '#444';
+      filesBreadcrumbs.appendChild(sep);
+
+      const segBtn = document.createElement('button');
+      segBtn.className = `breadcrumb-segment ${idx === parts.length - 1 ? 'active' : ''}`;
+      segBtn.textContent = p;
+      segBtn.onclick = () => fetchFiles(target);
+      filesBreadcrumbs.appendChild(segBtn);
+    });
+
+    filesBreadcrumbs.scrollLeft = filesBreadcrumbs.scrollWidth;
+  }
+
+  function getFileIcon(ext, isDir) {
+    if (isDir) return '📁';
+    const map = {
+      py: '🐍',
+      js: '🟨',
+      json: '📦',
+      html: '🌐',
+      css: '🎨',
+      md: '📝',
+      sh: '⚡',
+      txt: '📄',
+      svg: '🖼️',
+      png: '🖼️',
+      jpg: '🖼️',
+      log: '📜'
+    };
+    return map[ext] || '📄';
+  }
+
+  function renderFilesList(items, parentPath) {
+    if (!filesListContainer) return;
+    filesListContainer.innerHTML = '';
+
+    if (btnFilesUp) {
+      btnFilesUp.onclick = () => {
+        if (parentPath) fetchFiles(parentPath);
+      };
+      btnFilesUp.disabled = !parentPath;
+    }
+
+    if (items.length === 0) {
+      filesListContainer.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">این پوشه خالی است.</div>';
+      return;
+    }
+
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'file-item';
+
+      row.innerHTML = `
+        <div class="file-item-left">
+          <span class="file-icon">${getFileIcon(item.ext, item.is_dir)}</span>
+          <span class="file-name">${item.name}</span>
+        </div>
+        <div class="file-meta-right">
+          ${item.is_dir ? `<span>${item.item_count} مورد</span>` : `<span>${item.size_formatted}</span>`}
+        </div>
+      `;
+
+      row.onclick = () => {
+        if (item.is_dir) {
+          fetchFiles(item.path);
+        } else {
+          viewCodeFile(item.path);
+        }
+      };
+
+      filesListContainer.appendChild(row);
+    });
+  }
+
+  function openFilesModal() {
+    closeDrawer();
+    fetchFiles(currentFilesPath || workspaceDir);
+    if (filesModal) filesModal.classList.add('open');
+  }
+
+  function closeFilesModal() {
+    if (filesModal) filesModal.classList.remove('open');
+  }
+
+  // Feature 4.2: Built-in Code Viewer
+  async function viewCodeFile(filePath) {
+    currentViewedFilePath = filePath;
+    currentViewedFileContent = '';
+    const filename = filePath.split('/').pop();
+    const ext = filename.split('.').pop().toLowerCase();
+
+    if (codeViewerTitle) codeViewerTitle.textContent = filename;
+    if (codeViewerLang) codeViewerLang.textContent = ext;
+    if (codeLineNumbers) codeLineNumbers.textContent = '1';
+    if (codeHighlighted) codeHighlighted.textContent = 'در حال بارگذاری فایل...';
+    if (codeViewerModal) codeViewerModal.classList.add('open');
+
+    try {
+      const res = await authFetch(`/api/file-content?path=${encodeURIComponent(filePath)}`);
+      if (res.ok) {
+        const data = await res.json();
+        currentViewedFileContent = data.content || '';
+
+        // Generate line numbers
+        const linesCount = data.lines || (data.content.split('\n').length);
+        let numStr = '';
+        for (let i = 1; i <= linesCount; i++) {
+          numStr += i + '\n';
+        }
+        if (codeLineNumbers) codeLineNumbers.textContent = numStr;
+
+        // Syntax Highlighting
+        if (typeof hljs !== 'undefined') {
+          try {
+            if (ext && hljs.getLanguage(ext)) {
+              codeHighlighted.innerHTML = hljs.highlight(data.content, { language: ext }).value;
+            } else {
+              codeHighlighted.innerHTML = hljs.highlightAuto(data.content).value;
+            }
+          } catch (e) {
+            codeHighlighted.textContent = data.content;
+          }
+        } else {
+          codeHighlighted.textContent = data.content;
+        }
+      }
+    } catch (e) {
+      if (codeHighlighted) codeHighlighted.textContent = `خطا در باز کردن فایل: ${e.message}`;
+    }
+  }
+
+  function closeCodeViewer() {
+    if (codeViewerModal) codeViewerModal.classList.remove('open');
+  }
+
+  // Copy Code in Viewer
+  function copyCurrentFileCode() {
+    if (!currentViewedFileContent) return;
+    navigator.clipboard.writeText(currentViewedFileContent).then(() => {
+      const orig = btnCodeCopy.innerText;
+      btnCodeCopy.innerText = 'کپی شد';
+      btnCodeCopy.style.color = '#10b981';
+      setTimeout(() => {
+        btnCodeCopy.innerText = orig;
+        btnCodeCopy.style.color = '';
+      }, 2000);
+    });
+  }
+
+  // Download File
+  function downloadCurrentFile() {
+    if (!currentViewedFilePath) return;
+    const downloadUrl = `/api/file-download?path=${encodeURIComponent(currentViewedFilePath)}`;
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = currentViewedFilePath.split('/').pop();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // Mention File in Chat Input (@filename)
+  function mentionCurrentFile() {
+    if (!currentViewedFilePath) return;
+    const filename = currentViewedFilePath.split('/').pop();
+    closeCodeViewer();
+    closeFilesModal();
+    if (inputMessage) {
+      inputMessage.value += (inputMessage.value ? ' ' : '') + `@${filename} `;
+      inputMessage.dispatchEvent(new Event('input'));
+      inputMessage.focus();
+    }
+  }
+
+  // =========================================================================
+  // Drawer / History Management
+  // =========================================================================
+  function updateDrawerChatList() {
+    if (!chatsList) return;
+    chatsList.innerHTML = '';
+
+    const chatKeys = Object.keys(chats).sort((a, b) => (chats[b].updated_at || 0) - (chats[a].updated_at || 0));
+
+    chatKeys.forEach(cid => {
+      const c = chats[cid];
+      const item = document.createElement('div');
+      item.className = `chat-item ${cid === activeChatId ? 'active' : ''}`;
+
+      const info = document.createElement('div');
+      info.className = 'chat-item-info';
+      info.onclick = () => switchChat(cid);
+
+      const title = document.createElement('div');
+      title.className = 'chat-item-title';
+      title.textContent = c.title || 'گفتگوی جدید';
+
+      const meta = document.createElement('div');
+      meta.className = 'chat-item-meta';
+      meta.textContent = `${c.messages ? c.messages.length : 0} پیام • ${formatTimestamp(c.updated_at)}`;
+
+      info.appendChild(title);
+      info.appendChild(meta);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'chat-item-delete';
+      delBtn.title = 'حذف گفتگو';
+      delBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      `;
+      delBtn.onclick = (e) => {
+        e.stopPropagation();
+        deleteChat(cid);
+      };
+
+      item.appendChild(info);
+      item.appendChild(delBtn);
+      chatsList.appendChild(item);
+    });
+  }
+
+  function switchChat(chatId) {
+    if (activeChatId === chatId && chats[chatId]) {
+      closeDrawer();
+      return;
+    }
+    activeChatId = chatId;
+    saveToLocalStorage();
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'switch_chat', chat_id: chatId }));
+    }
+
+    const chat = chats[chatId];
+    if (chat && chat.model) {
+      currentModel = chat.model;
+      if (headerModelText) headerModelText.textContent = currentModel;
+    }
+
+    renderMessages();
+    updateDrawerChatList();
+    closeDrawer();
+  }
+
+  async function createNewChat() {
+    closeDrawer();
+    try {
+      const res = await authFetch('/api/chats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'گفتگوی جدید', model: currentModel })
+      });
+      const newChat = await res.json();
+      chats[newChat.id] = newChat;
+      activeChatId = newChat.id;
+      saveToLocalStorage();
+      renderMessages();
+      updateDrawerChatList();
+      inputMessage.focus();
+    } catch (e) {
+      console.error('Failed to create new chat:', e);
+    }
+  }
+
+  async function deleteChat(chatId) {
+    if (Object.keys(chats).length <= 1) {
+      chats[chatId].messages = [];
+      saveToLocalStorage();
+      renderMessages();
+      updateDrawerChatList();
+      return;
+    }
+
+    try {
+      const res = await authFetch(`/api/chats/${chatId}`, { method: 'DELETE' });
+      const data = await res.json();
+      delete chats[chatId];
+      if (data.active_chat) {
+        chats[data.active_chat.id] = data.active_chat;
+        activeChatId = data.active_chat.id;
+      } else {
+        activeChatId = Object.keys(chats)[0];
+      }
+      saveToLocalStorage();
+      renderMessages();
+      updateDrawerChatList();
+    } catch (e) {
+      console.error('Failed to delete chat:', e);
+    }
+  }
+
+  async function fetchServerChats() {
+    try {
+      const res = await authFetch('/api/chats');
+      const data = await res.json();
+      if (data && data.chats) {
+        data.chats.forEach(summary => {
+          if (!chats[summary.id]) {
+            chats[summary.id] = {
+              id: summary.id,
+              title: summary.title,
+              created_at: summary.created_at,
+              updated_at: summary.updated_at,
+              model: summary.model,
+              messages: []
+            };
+          } else {
+            chats[summary.id].title = summary.title;
+            chats[summary.id].updated_at = summary.updated_at;
+            chats[summary.id].model = summary.model;
+          }
+        });
+
+        if (data.active_chat_id && !activeChatId) {
+          activeChatId = data.active_chat_id;
+        }
+
+        if (activeChatId) {
+          const chatRes = await authFetch(`/api/chats/${activeChatId}`);
+          if (chatRes.ok) {
+            const fullChat = await chatRes.json();
+            chats[activeChatId] = fullChat;
+            if (fullChat.model) currentModel = fullChat.model;
+          }
+        }
+
+        if (headerModelText) headerModelText.textContent = currentModel;
+        saveToLocalStorage();
+        renderMessages();
+        updateDrawerChatList();
+      }
+    } catch (e) {
+      console.warn('Could not fetch chats:', e);
+    }
+  }
+
+  async function fetchModels() {
+    try {
+      const res = await authFetch('/api/models');
+      const data = await res.json();
+      if (data && data.models) {
+        availableModels = data.models;
+        if (modelSelect) {
+          modelSelect.innerHTML = '';
+          availableModels.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.name;
+            if (m.id === currentModel) opt.selected = true;
+            modelSelect.appendChild(opt);
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch models:', e);
+    }
+  }
+
+  async function fetchWorkspace() {
+    try {
+      const res = await authFetch('/api/workspace');
+      const data = await res.json();
+      if (data && data.current) {
+        workspaceDir = data.current;
+        if (workspacePathText) workspacePathText.textContent = workspaceDir;
+      }
+    } catch (e) {
+      console.warn('Could not fetch workspace:', e);
+    }
+  }
+
+  // =========================================================================
+  // WebSocket Connection & Real-Time Handler
+  // =========================================================================
+  function connectWebSocket() {
+    if (!isAuthenticated) return;
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${location.host}/ws?token=${encodeURIComponent(authToken || '')}`;
+
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      try { ws.close(); } catch (e) {}
+    }
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      isWsConnected = true;
+      updateNetworkStatus();
+    };
+
+    ws.onclose = (e) => {
+      isWsConnected = false;
+      updateNetworkStatus();
+      if (e && e.code === 4401) {
+        isAuthenticated = false;
+        showLoginModal('احراز هویت نامعتبر است. لطفاً وارد شوید.');
+        return;
+      }
+      // Auto-reconnect every 2 seconds if authenticated
+      if (isAuthenticated) {
+        setTimeout(connectWebSocket, 2000);
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.error('WS Error:', err);
+      isWsConnected = false;
+      updateNetworkStatus();
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (!data) return;
+        handleWsMessage(data);
+      } catch (err) {
+        console.error('WS Message handle error:', err);
+      }
+    };
+  }
+
+  function handleWsMessage(data) {
+    const type = data.type;
+
+    if (type === 'auth_error') {
+      isAuthenticated = false;
+      showLoginModal(data.message || 'احراز هویت نامعتبر است. لطفاً وارد شوید.');
+      return;
+    }
+
+    if (type === 'connected') {
+      if (data.chat) {
+        chats[data.chat.id] = data.chat;
+        activeChatId = data.chat.id;
+        if (data.chat.model) currentModel = data.chat.model;
+        if (data.chat.effort) currentEffort = data.chat.effort;
+        if (data.chat.mode) currentMode = data.chat.mode;
+        if (headerModelText) headerModelText.textContent = currentModel;
+        if (pillModelText) pillModelText.textContent = currentModel;
+        updateEffortPill(currentEffort);
+        updateModePill(currentMode);
+        renderMessages();
+        updateDrawerChatList();
+      }
+      if (data.models) {
+        availableModels = data.models;
+      }
+      if (data.effort) {
+        currentEffort = data.effort;
+        updateEffortPill(currentEffort);
+      }
+      if (data.mode) {
+        currentMode = data.mode;
+        updateModePill(currentMode);
+      }
+      if (data.processes_count !== undefined) {
+        updateProcessBadge(data.processes_count);
+      }
+      if (data.internet_ok !== undefined) {
+        isInternetOnline = data.internet_ok;
+        updateNetworkStatus();
+      }
+    } else if (type === 'pong') {
+      if (pingStartTime > 0) {
+        const latency = Math.round(performance.now() - pingStartTime);
+        if (pingValText) pingValText.textContent = `${latency}ms`;
+        if (pingDot) {
+          pingDot.className = `ping-dot ${latency > 250 ? 'slow' : ''}`;
+        }
+      }
+    } else if (type === 'status') {
+      const text = data.status;
+      if (text) {
+        if (thinkingRow) thinkingRow.classList.add('active');
+        if (thinkingText) thinkingText.textContent = text;
+        scrollToBottom();
+      } else {
+        if (thinkingRow) thinkingRow.classList.remove('active');
+      }
+    } else if (type === 'thinking_update') {
+      if (liveThinkingEl && data.thinking) {
+        const body = liveThinkingEl.querySelector('.thinking-body');
+        if (body) {
+          body.textContent = data.thinking;
+        }
+        const badge = liveThinkingEl.querySelector('.thinking-badge');
+        const elapsed = ((Date.now() - liveThinkingStartTime) / 1000).toFixed(1);
+        const tok = data.tokens ? ` • ${data.tokens} توکن` : '';
+        if (badge) badge.textContent = `${elapsed}s${tok}`;
+        scrollToBottom();
+      }
+    } else if (type === 'effort_updated') {
+      currentEffort = data.effort;
+      updateEffortPill(currentEffort);
+      if (chats[data.chat_id]) {
+        chats[data.chat_id].effort = currentEffort;
+        saveToLocalStorage();
+      }
+    } else if (type === 'mode_updated') {
+      currentMode = data.mode;
+      updateModePill(currentMode);
+      if (chats[data.chat_id]) {
+        chats[data.chat_id].mode = currentMode;
+        saveToLocalStorage();
+      }
+    } else if (type === 'turn_stopped') {
+      if (liveThinkingTimer) {
+        clearInterval(liveThinkingTimer);
+        liveThinkingTimer = null;
+      }
+      if (liveThinkingEl) {
+        liveThinkingEl.classList.remove('pulse-active');
+        const badge = liveThinkingEl.querySelector('.thinking-badge');
+        if (badge) badge.textContent = 'متوقف شد';
+      }
+      if (btnSend) {
+        btnSend.classList.remove('stop-mode');
+        btnSend.title = 'ارسال پیام';
+      }
+      if (activeStreamingBubble) {
+        activeStreamingBubble.innerHTML += '<br><em style="color:#ef4444;font-size:11px;">[عملیات متوقف گردید]</em>';
+      }
+      activeStreamingBubble = null;
+      currentStreamText = '';
+      currentAccordionEl = null;
+      liveThinkingEl = null;
+    } else if (type === 'step_start') {
+      handleStepStart(data);
+    } else if (type === 'command_output') {
+      handleCommandOutput(data);
+    } else if (type === 'step_done') {
+      handleStepDone(data);
+    } else if (type === 'command_stopped') {
+      handleStepDone({ step_index: data.step_index, duration: 0, output: 'دستور متوقف گردید.' });
+    } else if (type === 'permission_request') {
+      handlePermissionRequest(data);
+    } else if (type === 'delta') {
+      if (thinkingRow) thinkingRow.classList.remove('active');
+
+      if (!activeStreamingBubble) {
+        currentStreamText = '';
+        activeStreamingBubble = appendMessageBubble('assistant', '', null, true);
+      }
+
+      currentStreamText += data.delta;
+      if (typeof marked !== 'undefined') {
+        activeStreamingBubble.innerHTML = marked.parse(currentStreamText);
+      } else {
+        activeStreamingBubble.textContent = currentStreamText;
+      }
+      scrollToBottom();
+    } else if (type === 'done') {
+      if (thinkingRow) thinkingRow.classList.remove('active');
+
+      if (liveThinkingTimer) {
+        clearInterval(liveThinkingTimer);
+        liveThinkingTimer = null;
+      }
+      if (liveThinkingEl) {
+        liveThinkingEl.classList.remove('pulse-active');
+        const titleSpan = liveThinkingEl.querySelector('.thinking-title-wrap span:last-child');
+        if (titleSpan) titleSpan.textContent = 'فرایند تفکر ایجنت (Thinking Process)';
+        const badge = liveThinkingEl.querySelector('.thinking-badge');
+        const totalElapsed = ((Date.now() - liveThinkingStartTime) / 1000).toFixed(1);
+        const tok = data.meta && data.meta.thinking_tokens ? ` • ${data.meta.thinking_tokens} توکن` : '';
+        if (badge) badge.textContent = `${totalElapsed}s${tok}`;
+        if (data.meta && data.meta.thinking) {
+          const body = liveThinkingEl.querySelector('.thinking-body');
+          if (body) body.textContent = data.meta.thinking;
+        }
+      }
+      if (btnSend) {
+        btnSend.classList.remove('stop-mode');
+        btnSend.title = 'ارسال پیام';
+      }
+
+      const fullText = data.full_text || currentStreamText;
+      const targetChatId = data.chat_id || activeChatId;
+
+      if (!chats[targetChatId]) {
+        chats[targetChatId] = { id: targetChatId, messages: [] };
+      }
+
+      const msgObj = {
+        role: 'assistant',
+        content: fullText,
+        timestamp: Date.now() / 1000,
+        meta: data.meta || {}
+      };
+      chats[targetChatId].messages.push(msgObj);
+      chats[targetChatId].updated_at = Date.now() / 1000;
+
+      saveToLocalStorage();
+
+      if (activeStreamingBubble) {
+        if (typeof marked !== 'undefined') {
+          activeStreamingBubble.innerHTML = marked.parse(fullText);
+        } else {
+          activeStreamingBubble.textContent = fullText;
+        }
+      } else {
+        renderMessages();
+      }
+
+      activeStreamingBubble = null;
+      currentStreamText = '';
+      currentAccordionEl = null;
+      liveThinkingEl = null;
+      currentMiniTerminals = {};
+      activeTurnStepIndices.clear();
+
+      updateDrawerChatList();
+      scrollToBottom(true);
+    } else if (type === 'error') {
+      if (thinkingRow) thinkingRow.classList.remove('active');
+      if (btnSend) {
+        btnSend.classList.remove('stop-mode');
+        btnSend.title = 'ارسال پیام';
+      }
+      appendMessageBubble('assistant', `⚠️ **خطا:**\n${data.error}`, Date.now() / 1000, true, true);
+      activeStreamingBubble = null;
+      currentStreamText = '';
+      currentAccordionEl = null;
+      liveThinkingEl = null;
+    } else if (type === 'chat_cleared') {
+      if (chats[data.chat_id]) {
+        chats[data.chat_id].messages = [];
+        saveToLocalStorage();
+        renderMessages();
+        updateDrawerChatList();
+      }
+    } else if (type === 'model_updated') {
+      currentModel = data.model;
+      if (headerModelText) headerModelText.textContent = currentModel;
+      if (pillModelText) pillModelText.textContent = currentModel;
+      if (modelSelect) modelSelect.value = currentModel;
+      if (chats[data.chat_id]) {
+        chats[data.chat_id].model = currentModel;
+        saveToLocalStorage();
+      }
+    } else if (type === 'process_log_line') {
+      if (currentInspectingPid === data.pid && inspectTerminalOutput) {
+        inspectTerminalOutput.textContent += `\n${data.line}`;
+        if (inspectTerminalScreen) inspectTerminalScreen.scrollTop = inspectTerminalScreen.scrollHeight;
+      }
+    }
+  }
+
+  // Send User Message
+  function sendMessage() {
+    if (!inputMessage) return;
+
+    // Check if turn is currently running -> Stop turn
+    if (btnSend && btnSend.classList.contains('stop-mode')) {
+      triggerHaptic(20);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'stop_turn', chat_id: activeChatId }));
+      }
+      return;
+    }
+
+    const text = inputMessage.value.trim();
+    if (!text) return;
+
+    triggerHaptic(15);
+    closeSlashPopover();
+    closeMentionsPopover();
+
+    if (!activeChatId || !chats[activeChatId]) {
+      const newId = `chat_${Date.now()}`;
+      chats[newId] = {
+        id: newId,
+        title: text.slice(0, 35),
+        created_at: Date.now() / 1000,
+        updated_at: Date.now() / 1000,
+        model: currentModel,
+        effort: currentEffort,
+        mode: currentMode,
+        messages: []
+      };
+      activeChatId = newId;
+    }
+
+    const userMsg = {
+      role: 'user',
+      content: text,
+      timestamp: Date.now() / 1000
+    };
+    chats[activeChatId].messages.push(userMsg);
+    chats[activeChatId].updated_at = Date.now() / 1000;
+
+    if (chats[activeChatId].title === 'گفتگوی جدید' || !chats[activeChatId].title) {
+      chats[activeChatId].title = text.slice(0, 36);
+    }
+
+    saveToLocalStorage();
+    appendMessageBubble('user', text, userMsg.timestamp, true);
+    updateDrawerChatList();
+
+    // Clear input & reset height
+    inputMessage.value = '';
+    inputMessage.style.height = 'auto';
+    btnSend.disabled = false;
+    btnSend.classList.add('stop-mode');
+    btnSend.title = 'توقف پردازش (Stop)';
+
+    // Start Live Turn UI Container
+    const row = document.createElement('div');
+    row.className = 'msg-row assistant';
+
+    const header = document.createElement('div');
+    header.className = 'assistant-header';
+    header.innerHTML = `
+      <div class="assistant-avatar">⚡</div>
+      <span class="assistant-name">Antigravity</span>
+      <span class="assistant-model-tag">${escapeHtml(currentModel)}</span>
+      <span class="msg-meta" style="margin-right:auto;">هم‌اکنون</span>
+    `;
+    row.appendChild(header);
+
+    // Live Thinking Accordion
+    liveThinkingStartTime = Date.now();
+    liveThinkingEl = createThinkingAccordion('', 0, 0, true);
+    row.appendChild(liveThinkingEl);
+
+    liveThinkingTimer = setInterval(() => {
+      const elapsed = ((Date.now() - liveThinkingStartTime) / 1000).toFixed(1);
+      const badge = liveThinkingEl.querySelector('.thinking-badge');
+      if (badge) badge.textContent = `${elapsed}s`;
+    }, 200);
+
+    // Live Assistant Bubble
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble ai-bubble';
+    bubble.setAttribute('dir', 'auto');
+    bubble.innerHTML = '<span style="color:#71717a;">در حال تفکر و پردازش...</span>';
+    row.appendChild(bubble);
+
+    chatInner.appendChild(row);
+    activeStreamingBubble = bubble;
+    currentStreamText = '';
+    currentAccordionEl = null;
+    scrollToBottom(true);
+
+    // Send to WebSocket
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'user_message',
+        content: text,
+        chat_id: activeChatId,
+        model: currentModel,
+        effort: currentEffort,
+        mode: currentMode
+      }));
+    } else {
+      appendMessageBubble('assistant', '⚠️ در حال برقراری مجدد ارتباط با سرور... لطفاً دوباره تلاش کنید.', Date.now() / 1000, true, true);
+      btnSend.classList.remove('stop-mode');
+      btnSend.title = 'ارسال پیام';
+    }
+  }
+
+  // =========================================================================
+  // Antigravity Quick Control Pills & Options
+  // =========================================================================
+  const EFFORT_LEVELS = ['low', 'medium', 'high', 'max'];
+  const EFFORT_LABELS = {
+    'low': 'تلاش: کم',
+    'medium': 'تلاش: متوسط',
+    'high': 'تلاش: زیاد',
+    'max': 'تلاش: حداکثر'
+  };
+
+  function cycleEffort() {
+    triggerHaptic(15);
+    const currIdx = EFFORT_LEVELS.indexOf(currentEffort);
+    const nextIdx = (currIdx + 1) % EFFORT_LEVELS.length;
+    currentEffort = EFFORT_LEVELS[nextIdx];
+    updateEffortPill(currentEffort);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'set_effort', chat_id: activeChatId, effort: currentEffort }));
+    }
+  }
+
+  function updateEffortPill(effort) {
+    if (pillEffortText) pillEffortText.textContent = EFFORT_LABELS[effort] || `تلاش: ${effort}`;
+  }
+
+  const MODE_LEVELS = ['auto', 'plan', 'request-review'];
+  const MODE_LABELS = {
+    'auto': 'خودکار',
+    'plan': 'طرح‌ریزی',
+    'request-review': 'نیاز به تایید'
+  };
+
+  function cycleMode() {
+    triggerHaptic(15);
+    const currIdx = MODE_LEVELS.indexOf(currentMode);
+    const nextIdx = (currIdx + 1) % MODE_LEVELS.length;
+    currentMode = MODE_LEVELS[nextIdx];
+    updateModePill(currentMode);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'set_mode', chat_id: activeChatId, mode: currentMode }));
+    }
+  }
+
+  function updateModePill(mode) {
+    if (pillModeText) pillModeText.textContent = MODE_LABELS[mode] || mode;
+  }
+
+  // Ping Watchdog
+  let pingStartTime = 0;
+  function startPingWatchdog() {
+    setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        pingStartTime = performance.now();
+        ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 6000);
+  }
+
+  // Model Picker Bottom Sheet
+  function openModelSheet() {
+    triggerHaptic(15);
+    if (!modelSheetBackdrop || !modelSheetBody) return;
+    modelSheetBody.innerHTML = '';
+
+    availableModels.forEach(m => {
+      const card = document.createElement('div');
+      card.className = `model-choice-card ${m.id === currentModel ? 'selected' : ''}`;
+      card.innerHTML = `
+        <div>
+          <div class="model-choice-name">${escapeHtml(m.name)}</div>
+          <div class="model-choice-id">${escapeHtml(m.id)}</div>
+        </div>
+        ${m.id === currentModel ? '<span style="color:#00f0ff;font-weight:bold;">✓</span>' : ''}
+      `;
+      card.onclick = () => {
+        triggerHaptic(20);
+        selectModel(m.id);
+        closeModelSheet();
+      };
+      modelSheetBody.appendChild(card);
+    });
+
+    modelSheetBackdrop.classList.add('active');
+  }
+
+  function closeModelSheet() {
+    if (modelSheetBackdrop) modelSheetBackdrop.classList.remove('active');
+  }
+
+  function selectModel(modelId) {
+    currentModel = modelId;
+    if (pillModelText) pillModelText.textContent = modelId;
+    if (headerModelText) headerModelText.textContent = modelId;
+    if (modelSelect) modelSelect.value = modelId;
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'set_model', chat_id: activeChatId, model: modelId }));
+    }
+    if (chats[activeChatId]) {
+      chats[activeChatId].model = modelId;
+      saveToLocalStorage();
+    }
+  }
+
+  // =========================================================================
+  // Slash Commands & @ Mentions Autocomplete
+  // =========================================================================
+  const SLASH_COMMANDS = [
+    { cmd: '/goal', desc: 'اجرای تسک‌های عمیق و خودکار تا حصول نتیجه نهایی' },
+    { cmd: '/plan', desc: 'برنامه‌ریزی گام‌به‌گام و دقیق پیش از شروع کار' },
+    { cmd: '/boost', desc: 'تفکر عمیق و بررسی با چندین چشم‌انداز' },
+    { cmd: '/compact', desc: 'فشرده‌سازی سابقه و بازنشانی کانتکست' },
+    { cmd: '/schedule', desc: 'زمان‌بندی اجرای دستورات و کارهای دوره‌ای' },
+    { cmd: '/browser', desc: 'وب‌گردی و اتوماسیون تعامل با صفحات وب' },
+    { cmd: '/model', desc: 'مشاهده یا تغییر مدل هوش مصنوعی' },
+    { cmd: '/effort', desc: 'تنظیم تلاش استدلال (low, medium, high, max)' },
+    { cmd: '/mode', desc: 'تنظیم حالت اجرایی (auto, plan, request-review)' },
+    { cmd: '/clear', desc: 'پاکسازی پیام‌های گفتگوی فعلی' },
+    { cmd: '/restart', desc: 'راه‌اندازی مجدد موتور پردازش و بستن پروسه‌ها' },
+    { cmd: '/help', desc: 'نمایش راهنمای کامل دستورات' }
+  ];
+
+  function handleInputPopovers() {
+    if (!inputMessage) return;
+    const val = inputMessage.value;
+    
+    // 1. Slash Commands
+    if (val.startsWith('/')) {
+      const q = val.toLowerCase().trim();
+      const matched = SLASH_COMMANDS.filter(c => c.cmd.startsWith(q));
+      renderSlashPopover(matched);
+      closeMentionsPopover();
+      return;
+    } else {
+      closeSlashPopover();
+    }
+
+    // 2. @ Mentions
+    const atIdx = val.lastIndexOf('@');
+    if (atIdx !== -1 && (atIdx === 0 || /\s/.test(val[atIdx - 1]))) {
+      const q = val.slice(atIdx + 1).toLowerCase();
+      renderMentionsPopover(q);
+      return;
+    } else {
+      closeMentionsPopover();
+    }
+  }
+
+  function renderSlashPopover(list) {
+    if (!slashPopover) return;
+    if (list.length === 0) {
+      closeSlashPopover();
+      return;
+    }
+    slashPopover.innerHTML = '';
+    slashSelectedIdx = 0;
+
+    list.forEach((item, index) => {
+      const div = document.createElement('div');
+      div.className = `slash-item ${index === 0 ? 'selected' : ''}`;
+      div.innerHTML = `
+        <span class="slash-cmd-name">${item.cmd}</span>
+        <span class="slash-cmd-desc">${item.desc}</span>
+      `;
+      div.onclick = () => {
+        triggerHaptic(15);
+        inputMessage.value = item.cmd + ' ';
+        closeSlashPopover();
+        inputMessage.focus();
+        inputMessage.dispatchEvent(new Event('input'));
+      };
+      slashPopover.appendChild(div);
+    });
+
+    slashPopover.classList.add('active');
+  }
+
+  function closeSlashPopover() {
+    if (slashPopover) slashPopover.classList.remove('active');
+  }
+
+  async function fetchMentions() {
+    try {
+      const res = await authFetch('/api/mentions');
+      const data = await res.json();
+      if (data && data.items) {
+        cachedMentions = data.items;
+      }
+    } catch (e) {}
+  }
+
+  function renderMentionsPopover(query) {
+    if (!mentionsPopover) return;
+    const filtered = cachedMentions.filter(item => 
+      item.name.toLowerCase().includes(query) || item.path.toLowerCase().includes(query)
+    ).slice(0, 8);
+
+    if (filtered.length === 0) {
+      closeMentionsPopover();
+      return;
+    }
+
+    mentionsPopover.innerHTML = '';
+    mentionSelectedIdx = 0;
+
+    filtered.forEach((item, index) => {
+      const div = document.createElement('div');
+      div.className = `mention-item ${index === 0 ? 'selected' : ''}`;
+      div.innerHTML = `
+        <span class="mention-name">📄 ${escapeHtml(item.name)}</span>
+        <span class="mention-path">${escapeHtml(item.path)}</span>
+      `;
+      div.onclick = () => {
+        triggerHaptic(15);
+        const atIdx = inputMessage.value.lastIndexOf('@');
+        inputMessage.value = inputMessage.value.slice(0, atIdx) + item.path + ' ';
+        closeMentionsPopover();
+        inputMessage.focus();
+        inputMessage.dispatchEvent(new Event('input'));
+      };
+      mentionsPopover.appendChild(div);
+    });
+
+    mentionsPopover.classList.add('active');
+  }
+
+  function closeMentionsPopover() {
+    if (mentionsPopover) mentionsPopover.classList.remove('active');
+  }
+
+  function updatePopoverSelection(items, selectedIdx) {
+    items.forEach((it, idx) => {
+      it.classList.toggle('selected', idx === selectedIdx);
+      if (idx === selectedIdx) it.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  // =========================================================================
+  // Voice Input (Speech-to-Text via Web Speech API)
+  // =========================================================================
+  function initVoiceInput() {
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+      if (btnMic) btnMic.style.display = 'none';
+      return;
+    }
+    const recognition = new SpeechRec();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'fa-IR';
+
+    let isRecording = false;
+
+    recognition.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      if (inputMessage) {
+        inputMessage.value = (inputMessage.value + ' ' + text).trim();
+        inputMessage.dispatchEvent(new Event('input'));
+        inputMessage.focus();
+      }
+    };
+
+    recognition.onend = () => {
+      isRecording = false;
+      if (btnMic) btnMic.classList.remove('recording');
+    };
+
+    recognition.onerror = () => {
+      isRecording = false;
+      if (btnMic) btnMic.classList.remove('recording');
+    };
+
+    if (btnMic) {
+      btnMic.addEventListener('click', () => {
+        triggerHaptic(20);
+        if (isRecording) {
+          recognition.stop();
+        } else {
+          try {
+            recognition.start();
+            isRecording = true;
+            btnMic.classList.add('recording');
+          } catch (err) {
+            isRecording = false;
+            btnMic.classList.remove('recording');
+          }
+        }
+      });
+    }
+  }
+
+  // Drawer Controls
+  function openDrawer() {
+    if (drawerBackdrop) drawerBackdrop.classList.add('open');
+  }
+
+  function closeDrawer() {
+    if (drawerBackdrop) drawerBackdrop.classList.remove('open');
+  }
+
+  // Setup Event Listeners
+  function setupEvents() {
+    // Input Auto-Resize, Popovers & Send
+    inputMessage.addEventListener('input', () => {
+      inputMessage.style.height = 'auto';
+      inputMessage.style.height = Math.min(inputMessage.scrollHeight, 140) + 'px';
+      btnSend.disabled = inputMessage.value.trim().length === 0 && !btnSend.classList.contains('stop-mode');
+      handleInputPopovers();
+    });
+
+    inputMessage.addEventListener('keydown', (e) => {
+      // Popover keyboard navigation
+      if (slashPopover && slashPopover.classList.contains('active')) {
+        const items = slashPopover.querySelectorAll('.slash-item');
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          slashSelectedIdx = (slashSelectedIdx + 1) % items.length;
+          updatePopoverSelection(items, slashSelectedIdx);
+          return;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          slashSelectedIdx = (slashSelectedIdx - 1 + items.length) % items.length;
+          updatePopoverSelection(items, slashSelectedIdx);
+          return;
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          if (items[slashSelectedIdx]) items[slashSelectedIdx].click();
+          return;
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          closeSlashPopover();
+          return;
+        }
+      }
+
+      if (mentionsPopover && mentionsPopover.classList.contains('active')) {
+        const items = mentionsPopover.querySelectorAll('.mention-item');
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          mentionSelectedIdx = (mentionSelectedIdx + 1) % items.length;
+          updatePopoverSelection(items, mentionSelectedIdx);
+          return;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          mentionSelectedIdx = (mentionSelectedIdx - 1 + items.length) % items.length;
+          updatePopoverSelection(items, mentionSelectedIdx);
+          return;
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          if (items[mentionSelectedIdx]) items[mentionSelectedIdx].click();
+          return;
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          closeMentionsPopover();
+          return;
+        }
+      }
+
+      if (e.key === 'Enter' && !e.shiftKey) {
+        if (window.innerWidth > 640 || !('ontouchstart' in window)) {
+          e.preventDefault();
+          sendMessage();
+        }
+      }
+    });
+
+    // Close popovers on click outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.input-container')) {
+        closeSlashPopover();
+        closeMentionsPopover();
+      }
+    });
+
+    btnSend.addEventListener('click', sendMessage);
+
+    // Quick Control Pills
+    if (pillModel) pillModel.addEventListener('click', openModelSheet);
+    if (pillEffort) pillEffort.addEventListener('click', cycleEffort);
+    if (pillMode) pillMode.addEventListener('click', cycleMode);
+    if (btnCloseModelSheet) btnCloseModelSheet.addEventListener('click', closeModelSheet);
+    if (modelSheetBackdrop) {
+      modelSheetBackdrop.addEventListener('click', (e) => {
+        if (e.target === modelSheetBackdrop) closeModelSheet();
+      });
+    }
+
+    // Header buttons
+    if (btnNewChat) btnNewChat.addEventListener('click', createNewChat);
+    if (btnMenu) btnMenu.addEventListener('click', openDrawer);
+    if (btnCloseDrawer) btnCloseDrawer.addEventListener('click', closeDrawer);
+    if (drawerBackdrop) {
+      drawerBackdrop.addEventListener('click', (e) => {
+        if (e.target === drawerBackdrop) closeDrawer();
+      });
+    }
+    if (btnDrawerNewChat) btnDrawerNewChat.addEventListener('click', createNewChat);
+
+    // Header quick tools
+    if (btnOpenFiles) btnOpenFiles.addEventListener('click', openFilesModal);
+    if (btnOpenProcesses) btnOpenProcesses.addEventListener('click', openProcessesModal);
+
+    // Drawer tool buttons
+    if (btnDrawerProcesses) btnDrawerProcesses.addEventListener('click', openProcessesModal);
+    if (btnDrawerFiles) btnDrawerFiles.addEventListener('click', openFilesModal);
+    if (btnDrawerRestart) btnDrawerRestart.addEventListener('click', restartEngine);
+    if (btnBannerRestart) btnBannerRestart.addEventListener('click', restartEngine);
+
+    // Processes modal buttons
+    if (btnCloseProcesses) btnCloseProcesses.addEventListener('click', closeProcessesModal);
+    if (btnRefreshProcesses) btnRefreshProcesses.addEventListener('click', fetchProcesses);
+    if (processesModal) {
+      processesModal.addEventListener('click', (e) => {
+        if (e.target === processesModal) closeProcessesModal();
+      });
+    }
+
+    // Inspect modal buttons
+    if (btnCloseInspect) btnCloseInspect.addEventListener('click', closeInspectModal);
+    if (inspectProcessModal) {
+      inspectProcessModal.addEventListener('click', (e) => {
+        if (e.target === inspectProcessModal) closeInspectModal();
+      });
+    }
+    if (btnSendInspectStdin) btnSendInspectStdin.addEventListener('click', sendInspectStdin);
+    if (inspectStdinInput) {
+      inspectStdinInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') sendInspectStdin();
+      });
+    }
+    if (btnSignalSigint) btnSignalSigint.addEventListener('click', () => {
+      if (currentInspectingPid) killProcess(currentInspectingPid, 'SIGINT');
+    });
+    if (btnSignalSigterm) btnSignalSigterm.addEventListener('click', () => {
+      if (currentInspectingPid) killProcess(currentInspectingPid, 'SIGTERM');
+    });
+    if (btnSignalSigkill) btnSignalSigkill.addEventListener('click', () => {
+      if (currentInspectingPid) killProcess(currentInspectingPid, 'SIGKILL');
+    });
+
+    // Files modal buttons
+    if (btnCloseFiles) btnCloseFiles.addEventListener('click', closeFilesModal);
+    if (filesModal) {
+      filesModal.addEventListener('click', (e) => {
+        if (e.target === filesModal) closeFilesModal();
+      });
+    }
+
+    // Code viewer modal buttons
+    if (btnCloseCodeViewer) btnCloseCodeViewer.addEventListener('click', closeCodeViewer);
+    if (btnCodeCopy) btnCodeCopy.addEventListener('click', copyCurrentFileCode);
+    if (btnCodeDownload) btnCodeDownload.addEventListener('click', downloadCurrentFile);
+    if (btnCodeMention) btnCodeMention.addEventListener('click', mentionCurrentFile);
+    if (codeViewerModal) {
+      codeViewerModal.addEventListener('click', (e) => {
+        if (e.target === codeViewerModal) closeCodeViewer();
+      });
+    }
+
+    // Model Change
+    if (modelSelect) {
+      modelSelect.addEventListener('change', () => {
+        const selected = modelSelect.value;
+        selectModel(selected);
+      });
+    }
+
+    // Extra Keys Toggle
+    if (btnToggleKeys && extraKeysRow) {
+      btnToggleKeys.addEventListener('click', () => {
+        extraKeysRow.classList.toggle('show');
+      });
+    }
+
+    // Extra key clicks
+    document.querySelectorAll('.key-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-key');
+        if (key === 'CLEAR') {
+          inputMessage.value = '/clear';
+          sendMessage();
+        } else if (key === '/restart') {
+          restartEngine();
+        } else if (key === 'TAB') {
+          inputMessage.value += '  ';
+          inputMessage.dispatchEvent(new Event('input'));
+          inputMessage.focus();
+        } else if (key === 'ESC') {
+          inputMessage.value = '';
+          inputMessage.style.height = 'auto';
+          btnSend.disabled = true;
+          closeSlashPopover();
+          closeMentionsPopover();
+        } else {
+          inputMessage.value += key + ' ';
+          inputMessage.dispatchEvent(new Event('input'));
+          inputMessage.focus();
+        }
+      });
+    });
+
+    // Quick Suggestions
+    document.querySelectorAll('.chip-btn').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const text = chip.getAttribute('data-prompt') || chip.innerText.trim();
+        inputMessage.value = text;
+        inputMessage.dispatchEvent(new Event('input'));
+        sendMessage();
+      });
+    });
+  }
+
+  // Setup Auth Events
+  function setupAuthEvents() {
+    if (authLoginForm) {
+      authLoginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        handleLoginSubmit();
+      });
+    }
+
+    if (btnToggleAuthPassword && authPassword) {
+      btnToggleAuthPassword.addEventListener('click', () => {
+        const isPwd = authPassword.type === 'password';
+        authPassword.type = isPwd ? 'text' : 'password';
+        const eye = document.getElementById('pwdEyeIcon');
+        if (eye) {
+          eye.innerHTML = isPwd
+            ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>'
+            : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+        }
+      });
+    }
+
+    if (btnDrawerLogout) {
+      btnDrawerLogout.addEventListener('click', handleLogout);
+    }
+
+    // Change Password Modal Events
+    if (btnOpenChangePassword && changePasswordModal) {
+      btnOpenChangePassword.addEventListener('click', () => {
+        closeDrawer();
+        if (changePwdAlert) changePwdAlert.style.display = 'none';
+        if (cpCurrentPassword) cpCurrentPassword.value = '';
+        if (cpNewUsername) cpNewUsername.value = currentUser;
+        if (cpNewPassword) cpNewPassword.value = '';
+        changePasswordModal.classList.add('active');
+      });
+    }
+
+    if (btnCloseChangePassword && changePasswordModal) {
+      btnCloseChangePassword.addEventListener('click', () => {
+        changePasswordModal.classList.remove('active');
+      });
+    }
+
+    if (changePasswordForm) {
+      changePasswordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const oldPwd = cpCurrentPassword ? cpCurrentPassword.value : '';
+        const newUsr = cpNewUsername ? cpNewUsername.value.trim() : '';
+        const newPwd = cpNewPassword ? cpNewPassword.value : '';
+
+        if (!oldPwd || !newPwd) {
+          if (changePwdAlert) {
+            changePwdAlert.textContent = 'لطفاً رمز عبور فعلی و جدید را وارد کنید.';
+            changePwdAlert.className = 'auth-alert';
+            changePwdAlert.style.display = 'block';
+          }
+          return;
+        }
+
+        try {
+          const res = await authFetch('/api/auth/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ old_password: oldPwd, new_username: newUsr, new_password: newPwd })
+          });
+          const data = await res.json();
+          if (res.ok && data.ok) {
+            if (changePwdAlert) {
+              changePwdAlert.textContent = 'رمز عبور با موفقیت تغییر کرد!';
+              changePwdAlert.className = 'auth-alert success';
+              changePwdAlert.style.display = 'block';
+            }
+            if (data.username) updateUserInfoUI(data.username);
+            setTimeout(() => {
+              if (changePasswordModal) changePasswordModal.classList.remove('active');
+            }, 1200);
+          } else {
+            if (changePwdAlert) {
+              changePwdAlert.textContent = data.error || 'خطا در تغییر رمز عبور.';
+              changePwdAlert.className = 'auth-alert';
+              changePwdAlert.style.display = 'block';
+            }
+          }
+        } catch (err) {
+          if (changePwdAlert) {
+            changePwdAlert.textContent = 'خطا در برقراری ارتباط با سرور.';
+            changePwdAlert.className = 'auth-alert';
+            changePwdAlert.style.display = 'block';
+          }
+        }
+      });
+    }
+  }
+
+  // Register PWA Service Worker
+  function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        console.log('[PWA] ServiceWorker registered:', reg.scope);
+      }).catch((err) => {
+        console.warn('[PWA] ServiceWorker error:', err);
+      });
+    }
+  }
+
+  // Initialize
+  async function init() {
+    loadFromLocalStorage();
+    if (headerModelText) headerModelText.textContent = currentModel;
+    if (pillModelText) pillModelText.textContent = currentModel;
+    updateEffortPill(currentEffort);
+    updateModePill(currentMode);
+
+    renderMessages();
+    updateDrawerChatList();
+
+    setupEvents();
+    setupAuthEvents();
+    initVoiceInput();
+    startPingWatchdog();
+
+    // Check authentication first
+    const isAuthed = await checkAuthStatus();
+    if (isAuthed) {
+      connectWebSocket();
+      fetchServerChats();
+      fetchModels();
+      fetchWorkspace();
+      fetchProcesses();
+      fetchMentions();
+    }
+
+    registerServiceWorker();
+
+    // Regular health & network polling (every 10s)
+    setInterval(checkHealth, 10000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+})();
