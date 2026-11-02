@@ -2331,7 +2331,10 @@ class AntigravityAccountApiHandler(BaseApiHandler):
                 os.path.expanduser('~/.gemini/oauth_token.json'),
                 os.path.expanduser('~/.gemini/api_key'),
                 '/data/data/com.termux/files/home/.gemini/jetski-standalone-oauth-token',
+                '/data/data/com.termux/files/home/.gemini/oauth_token.json',
                 '/data/data/com.termux/files/home/.gemini/api_key',
+                os.path.expanduser('~/.config/antigravity/auth.json'),
+                '/data/data/com.termux/files/home/.config/antigravity/auth.json',
             ]
             for p in token_paths:
                 if os.path.exists(p):
@@ -2340,7 +2343,27 @@ class AntigravityAccountApiHandler(BaseApiHandler):
                     except Exception:
                         pass
             os.environ.pop('GEMINI_API_KEY', None)
+            
+            # Cancel any running/pending CLI OAuth login flow and reset manager
+            try:
+                tornado.ioloop.IOLoop.current().add_callback(cli_login_mgr.cancel, False)
+            except Exception:
+                pass
+            cli_login_mgr.reset()
+
             user = get_current_user_profile()
+
+            # Broadcast instant account status update to all connected WebSocket clients
+            for client in list(connected_clients):
+                try:
+                    client.write_message(json.dumps({
+                        "type": "account_updated",
+                        "user": user,
+                        "logged_in": False
+                    }, ensure_ascii=False))
+                except Exception:
+                    pass
+
             self.finish(json.dumps({
                 "ok": True,
                 "message": "با موفقیت از حساب کاربری خارج شدید.",
@@ -2552,7 +2575,7 @@ class CliLoginManager:
             self.state = "error"
             return {"ok": False, "error": f"خطا در ارسال کد تایید: {e}"}
 
-    async def cancel(self, restore_backup=True):
+    def reset(self):
         if self._timeout_task and not self._timeout_task.done():
             self._timeout_task.cancel()
         if self.process and self.process.returncode is None:
@@ -2570,6 +2593,9 @@ class CliLoginManager:
         self.state = "idle"
         self.auth_url = None
         self.error_message = None
+
+    async def cancel(self, restore_backup=True):
+        self.reset()
 
     def get_status(self) -> Dict[str, Any]:
         user = get_current_user_profile()

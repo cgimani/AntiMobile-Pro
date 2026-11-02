@@ -18,8 +18,8 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/css/highlight.css?v=3.5">
-  <link rel="stylesheet" href="/css/app.css?v=3.5">
+  <link rel="stylesheet" href="/css/highlight.css?v=3.6">
+  <link rel="stylesheet" href="/css/app.css?v=3.6">
 </head>
 <body>
   <div class="app-container">
@@ -272,14 +272,23 @@
             <span>Settings</span>
           </button>
           
-          <div class="agy-user-card" id="sidebarUserCard" onclick="openSettingsModal('account')">
-            <div class="agy-user-avatar">
-              <span id="userAvatarText">👤</span>
+          <div class="agy-user-card-wrap" style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+            <div class="agy-user-card" id="sidebarUserCard" onclick="openSettingsModal('account')" style="flex: 1; min-width: 0;">
+              <div class="agy-user-avatar">
+                <span id="userAvatarText">👤</span>
+              </div>
+              <div class="agy-user-details" style="min-width: 0;">
+                <div class="agy-user-name" id="sidebarUserName">کاربر مهمان</div>
+                <div class="agy-user-email" id="sidebarUserEmail">حساب متصل نیست</div>
+              </div>
             </div>
-            <div class="agy-user-details">
-              <div class="agy-user-name" id="sidebarUserName">کاربر مهمان</div>
-              <div class="agy-user-email" id="sidebarUserEmail">حساب متصل نیست</div>
-            </div>
+            <button type="button" class="icon-btn agy-sidebar-logout-btn" id="btnSidebarLogout" onclick="event.stopPropagation(); logoutAccount()" title="خروج از حساب کاربری" style="display: none; width: 34px; height: 34px; flex-shrink: 0; color: #ef4444; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 6px;" aria-label="Logout">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -507,9 +516,14 @@
                 <span id="quotaModalAuthMethod">وضعیت ورود به Antigravity</span>
               </div>
             </div>
-            <button id="btnOpenCliLoginGuide" class="account-login-btn" title="تغییر یا ورود اکانت گوگل">
-              🔑 ورود گوگل
-            </button>
+            <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+              <button id="btnOpenCliLoginGuide" class="account-login-btn" onclick="closeQuotaModal(); openSettingsModal('account');" title="مدیریت حساب و فعال‌سازی">
+                🔑 مدیریت اکانت
+              </button>
+              <button id="btnQuotaLogout" class="account-login-btn" onclick="closeQuotaModal(); logoutAccount();" title="خروج از حساب" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171;">
+                🚪 خروج
+              </button>
+            </div>
           </div>
 
           <!-- Token Usage Meters -->
@@ -769,16 +783,19 @@
 
             <!-- Profile Overview Hero Card -->
             <div class="agy-setting-group">
-              <div class="account-profile-hero" id="accountHeroCard">
-                <div class="account-hero-avatar" id="accountHeroAvatar">👤</div>
-                <div class="account-hero-meta">
-                  <div class="account-hero-name" id="accountHeroName">کاربر مهمان</div>
-                  <div class="account-hero-email" id="accountHeroEmail">وارد نشده (حساب متصل نیست)</div>
-                  <div class="account-hero-badge">
-                    <span class="status-indicator-dot offline" id="accountHeroStatusDot"></span>
-                    <span id="accountHeroStatusText">حالت مهمان / آفلاین</span>
+              <div class="account-profile-hero" id="accountHeroCard" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                  <div class="account-hero-avatar" id="accountHeroAvatar">👤</div>
+                  <div class="account-hero-meta">
+                    <div class="account-hero-name" id="accountHeroName">کاربر مهمان</div>
+                    <div class="account-hero-email" id="accountHeroEmail">وارد نشده (حساب متصل نیست)</div>
+                    <div class="account-hero-badge">
+                      <span class="status-indicator-dot offline" id="accountHeroStatusDot"></span>
+                      <span id="accountHeroStatusText">حالت مهمان / آفلاین</span>
+                    </div>
                   </div>
                 </div>
+                <button type="button" class="agy-btn-danger" id="btnHeroQuickLogout" onclick="logoutAccount()" style="display: none; padding: 7px 14px; font-size: 12.5px; border-radius: 6px;">🚪 خروج از حساب</button>
               </div>
             </div>
 
@@ -1082,8 +1099,8 @@
   </div>
 
   <!-- Local Offline Scripts -->
-  <script src="/js/marked.min.js?v=3.5"></script>
-  <script src="/js/highlight.min.js?v=3.5"></script>
-  <script src="/js/app.js?v=3.5"></script>
+  <script src="/js/marked.min.js?v=3.6"></script>
+  <script src="/js/highlight.min.js?v=3.6"></script>
+  <script src="/js/app.js?v=3.6"></script>
 </body>
 </html>

@@ -410,7 +410,6 @@ html, body {
 .agy-feed-item.expanded .agy-feed-body {
   display: block !important;
 }
-}
 
 /* Edit badges: </>, {}, PY, diff stats */
 .agy-feed-action {
@@ -7464,4 +7463,22 @@ button, .icon-btn, .input-btn, .chip-btn {
 @keyframes agy-spin {
   to { transform: rotate(360deg); }
 }
+
+/* Sidebar & Quick Logout Buttons */
+.agy-sidebar-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.agy-sidebar-logout-btn:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  transform: scale(1.05);
+}
+
+.agy-sidebar-logout-btn:active {
+  transform: scale(0.95);
 }

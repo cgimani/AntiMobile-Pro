@@ -3007,6 +3007,14 @@
   function handleWsMessage(data) {
     const type = data.type;
 
+    if (type === 'account_updated') {
+      refreshAccountStatus();
+      if (typeof fetchAccountQuota === 'function') {
+        fetchAccountQuota();
+      }
+      return;
+    }
+
     if (type === 'auth_error') {
       isAuthenticated = false;
       showLoginModal(data.message || 'احراز هویت نامعتبر است. لطفاً وارد شوید.');
@@ -3838,6 +3846,7 @@
         const heroStatusDot = document.getElementById('accountHeroStatusDot');
         const heroStatusText = document.getElementById('accountHeroStatusText');
         const loggedInSection = document.getElementById('accountLoggedInSection');
+        const heroQuickLogout = document.getElementById('btnHeroQuickLogout');
 
         if (heroAvatar) heroAvatar.textContent = user.avatar || (isLoggedIn ? '👤' : '👤');
         if (heroName) heroName.textContent = user.name || (isLoggedIn ? 'کاربر متصل' : 'کاربر مهمان');
@@ -3852,14 +3861,21 @@
         if (loggedInSection) {
           loggedInSection.style.display = isLoggedIn ? 'block' : 'none';
         }
+        if (heroQuickLogout) {
+          heroQuickLogout.style.display = isLoggedIn ? 'inline-block' : 'none';
+        }
 
         // Sync Sidebar & Settings Footer
         const sidebarName = document.getElementById('sidebarUserName');
         const sidebarEmail = document.getElementById('sidebarUserEmail');
         const sidebarAvatar = document.getElementById('userAvatarText');
+        const btnSidebarLogout = document.getElementById('btnSidebarLogout');
         if (sidebarName) sidebarName.textContent = user.name || (isLoggedIn ? 'کاربر متصل' : 'کاربر مهمان');
         if (sidebarEmail) sidebarEmail.textContent = user.email || (isLoggedIn ? 'متصل' : 'حساب متصل نیست');
         if (sidebarAvatar) sidebarAvatar.textContent = user.avatar || '👤';
+        if (btnSidebarLogout) {
+          btnSidebarLogout.style.display = isLoggedIn ? 'inline-flex' : 'none';
+        }
 
         const sName = document.getElementById('settingsUserName');
         const sEmail = document.getElementById('settingsUserEmail');
@@ -3867,6 +3883,18 @@
         if (sName) sName.textContent = user.name || (isLoggedIn ? 'کاربر متصل' : 'کاربر مهمان');
         if (sEmail) sEmail.textContent = user.email ? (user.email.length > 20 ? user.email.substring(0, 18) + '...' : user.email) : 'حساب متصل نیست';
         if (sAvatar) sAvatar.textContent = user.avatar || '👤';
+
+        // Sync Quota Modal Elements
+        const qEmail = document.getElementById('quotaModalEmail');
+        const qStatus = document.getElementById('quotaModalAuthMethod');
+        const btnQuotaLogout = document.getElementById('btnQuotaLogout');
+        if (qEmail) qEmail.textContent = user.email || 'حساب متصل نیست';
+        if (qStatus) {
+          qStatus.textContent = isLoggedIn ? `متصل به Antigravity (${data.auth_method || 'آنلاین'})` : 'وضعیت: حساب متصل نیست (مهمان)';
+        }
+        if (btnQuotaLogout) {
+          btnQuotaLogout.style.display = isLoggedIn ? 'inline-flex' : 'none';
+        }
 
         // Render Quotas
         const quotasContainer = document.getElementById('accountSettingsQuotasList');
@@ -3963,22 +3991,56 @@
     }
   }
 
-  async function logoutAccount() {
-    if (!confirm('آیا از خروج از حساب کاربری اطمینان دارید؟ تمام نشست‌های محلی غیرفعال خواهند شد.')) {
-      return;
+  async function logoutAccount(skipConfirm = false) {
+    if (!skipConfirm) {
+      if (!confirm('آیا از خروج از حساب کاربری اطمینان دارید؟ تمام توکن‌ها و نشست‌های متصل غیرفعال خواهند شد.')) {
+        return;
+      }
     }
 
     try {
+      showToast('در حال خروج از حساب کاربری...', 'info');
       const res = await fetch('/api/antigravity/account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'logout' })
       });
       const data = await res.json();
-      showToast(data.message || 'از حساب خارج شدید.');
+
+      // Clear any stored client tokens
+      authToken = null;
+      isAuthenticated = false;
+      localStorage.removeItem('anti_auth_token');
+      localStorage.removeItem('anti_username');
+      sessionStorage.removeItem('anti_auth_token');
+      sessionStorage.removeItem('anti_username');
+
+      // Clear all login input fields in settings
+      const apiKeyInput = document.getElementById('inputGeminiApiKey');
+      if (apiKeyInput) apiKeyInput.value = '';
+      const oauthJsonInput = document.getElementById('inputOauthTokenJson');
+      if (oauthJsonInput) oauthJsonInput.value = '';
+      const authCodeInput = document.getElementById('inputCliAuthCode');
+      if (authCodeInput) authCodeInput.value = '';
+
+      // Reset CLI Login state and UI
+      if (typeof resetCliLoginUI === 'function') {
+        resetCliLoginUI();
+      }
+
+      showToast(data.message || '✓ با موفقیت از حساب کاربری خارج شدید.', 'success');
+
+      // Refresh UI everywhere
       await refreshAccountStatus();
+      if (typeof fetchAccountQuota === 'function') {
+        await fetchAccountQuota();
+      }
+      if (typeof fetchModels === 'function') {
+        fetchModels();
+      }
     } catch (e) {
-      showToast('خطا در خروج از حساب.', 'error');
+      console.error('[Logout] Error:', e);
+      showToast('خطا در خروج از حساب کاربری.', 'error');
     }
   }
 
@@ -4393,6 +4455,8 @@
   window.copyGoogleAuthUrl = copyGoogleAuthUrl;
   window.submitCliAuthCode = submitCliAuthCode;
   window.cancelCliLoginFlow = cancelCliLoginFlow;
+  window.openQuotaModal = openQuotaModal;
+  window.closeQuotaModal = closeQuotaModal;
 
   // Helper to bind guaranteed tap/click events
   function bindAction(el, handler) {
