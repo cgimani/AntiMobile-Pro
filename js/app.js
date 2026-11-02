@@ -3781,10 +3781,12 @@
   // =========================================================================
   const settingsModal = document.getElementById('settingsModal');
 
-  async function openSettingsModal() {
+  async function openSettingsModal(tabName = null) {
     closeDrawer();
     if (settingsModal) settingsModal.classList.add('open', 'active');
-    renderSettingsProjectsList();
+    
+    const targetTab = tabName || 'account';
+    switchSettingsTab(targetTab);
 
     try {
       const res = await fetch('/api/settings');
@@ -3795,6 +3797,7 @@
     } catch (e) {
       console.warn('[Settings] Failed to fetch server settings:', e);
     }
+    refreshAccountStatus();
   }
 
   function closeSettingsModal() {
@@ -3815,7 +3818,196 @@
     });
     if (tabName === 'projects') {
       renderSettingsProjectsList();
+    } else if (tabName === 'account') {
+      refreshAccountStatus();
     }
+  }
+
+  async function refreshAccountStatus(forceToast = false) {
+    try {
+      const res = await fetch('/api/antigravity/account');
+      if (res.ok) {
+        const data = await res.json();
+        const user = data.user || {};
+        const isLoggedIn = Boolean(data.logged_in && user.authenticated);
+
+        // Update Account Hero Card
+        const heroAvatar = document.getElementById('accountHeroAvatar');
+        const heroName = document.getElementById('accountHeroName');
+        const heroEmail = document.getElementById('accountHeroEmail');
+        const heroStatusDot = document.getElementById('accountHeroStatusDot');
+        const heroStatusText = document.getElementById('accountHeroStatusText');
+        const loggedInSection = document.getElementById('accountLoggedInSection');
+
+        if (heroAvatar) heroAvatar.textContent = user.avatar || (isLoggedIn ? '👤' : '👤');
+        if (heroName) heroName.textContent = user.name || (isLoggedIn ? 'کاربر متصل' : 'کاربر مهمان');
+        if (heroEmail) heroEmail.textContent = user.email || (isLoggedIn ? 'حساب فعال' : 'وارد نشده (حساب متصل نیست)');
+        
+        if (heroStatusDot) {
+          heroStatusDot.className = `status-indicator-dot ${isLoggedIn ? 'online' : 'offline'}`;
+        }
+        if (heroStatusText) {
+          heroStatusText.textContent = isLoggedIn ? `متصل (${data.auth_method || 'آنلاین'})` : 'حالت مهمان / آفلاین';
+        }
+        if (loggedInSection) {
+          loggedInSection.style.display = isLoggedIn ? 'block' : 'none';
+        }
+
+        // Sync Sidebar & Settings Footer
+        const sidebarName = document.getElementById('sidebarUserName');
+        const sidebarEmail = document.getElementById('sidebarUserEmail');
+        const sidebarAvatar = document.getElementById('userAvatarText');
+        if (sidebarName) sidebarName.textContent = user.name || (isLoggedIn ? 'کاربر متصل' : 'کاربر مهمان');
+        if (sidebarEmail) sidebarEmail.textContent = user.email || (isLoggedIn ? 'متصل' : 'حساب متصل نیست');
+        if (sidebarAvatar) sidebarAvatar.textContent = user.avatar || '👤';
+
+        const sName = document.getElementById('settingsUserName');
+        const sEmail = document.getElementById('settingsUserEmail');
+        const sAvatar = document.getElementById('settingsUserAvatar');
+        if (sName) sName.textContent = user.name || (isLoggedIn ? 'کاربر متصل' : 'کاربر مهمان');
+        if (sEmail) sEmail.textContent = user.email ? (user.email.length > 20 ? user.email.substring(0, 18) + '...' : user.email) : 'حساب متصل نیست';
+        if (sAvatar) sAvatar.textContent = user.avatar || '👤';
+
+        // Render Quotas
+        const quotasContainer = document.getElementById('accountSettingsQuotasList');
+        if (quotasContainer && data.models_quota) {
+          quotasContainer.innerHTML = '';
+          data.models_quota.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'agy-setting-card';
+            card.style.flexDirection = 'column';
+            card.style.alignItems = 'stretch';
+            card.style.gap = '8px';
+            card.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 600; font-size: 13.5px; color: #fff;">${m.name}</span>
+                <span style="font-size: 11px; color: ${isLoggedIn ? '#4ade80' : '#9ca3af'}; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 4px;">${m.tier || ''}</span>
+              </div>
+              <div style="width: 100%; height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
+                <div style="width: ${m.used_percentage || 0}%; height: 100%; background: ${isLoggedIn ? '#60a5fa' : '#6b7280'};"></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #9ca3af;">
+                <span>سقف مجاز: ${m.rpm_limit}</span>
+                <span>سهمیه: ${m.daily_quota}</span>
+              </div>
+            `;
+            quotasContainer.appendChild(card);
+          });
+        }
+
+        if (forceToast) {
+          showToast(isLoggedIn ? `✓ متصل به حساب: ${user.name || user.email}` : 'وضعیت: حساب کاربری متصل نیست');
+        }
+      }
+    } catch (e) {
+      console.warn('[Account] Failed to fetch account status:', e);
+      if (forceToast) showToast('خطا در دریافت وضعیت حساب', 'error');
+    }
+  }
+
+  async function saveGeminiApiKey() {
+    const input = document.getElementById('inputGeminiApiKey');
+    if (!input) return;
+    const key = input.value.trim();
+    if (!key) {
+      showToast('لطفاً کلید Gemini API Key را وارد کنید.', 'warn');
+      return;
+    }
+
+    try {
+      showToast('در حال ثبت کلید...', 'info');
+      const res = await fetch('/api/antigravity/account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_api_key', api_key: key })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        input.value = '';
+        showToast(data.message || '✓ کلید Gemini با موفقیت فعال شد.');
+        await refreshAccountStatus();
+      } else {
+        showToast(data.error || 'خطا در ثبت کلید.', 'error');
+      }
+    } catch (e) {
+      showToast('خطا در برقراری ارتباط با سرور.', 'error');
+    }
+  }
+
+  async function saveCustomOAuthToken() {
+    const input = document.getElementById('inputCustomTokenJson');
+    if (!input) return;
+    const token = input.value.trim();
+    if (!token) {
+      showToast('لطفاً محتوای توکن را وارد کنید.', 'warn');
+      return;
+    }
+
+    try {
+      showToast('در حال ثبت توکن...', 'info');
+      const res = await fetch('/api/antigravity/account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_token', token_json: token })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        input.value = '';
+        showToast(data.message || '✓ توکن حساب با موفقیت ثبت شد.');
+        await refreshAccountStatus();
+      } else {
+        showToast(data.error || 'خطا در ثبت توکن.', 'error');
+      }
+    } catch (e) {
+      showToast('خطا در برقراری ارتباط با سرور.', 'error');
+    }
+  }
+
+  async function logoutAccount() {
+    if (!confirm('آیا از خروج از حساب کاربری اطمینان دارید؟ تمام نشست‌های محلی غیرفعال خواهند شد.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/antigravity/account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout' })
+      });
+      const data = await res.json();
+      showToast(data.message || 'از حساب خارج شدید.');
+      await refreshAccountStatus();
+    } catch (e) {
+      showToast('خطا در خروج از حساب.', 'error');
+    }
+  }
+
+  function copyCliAuthCommand() {
+    const cmdEl = document.getElementById('cliAuthCommandText');
+    const text = cmdEl ? cmdEl.textContent : 'agy --prompt "login"';
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('✓ دستور در کلیپ‌بورد کپی شد: ' + text);
+      }).catch(() => {
+        fallbackCopyText(text);
+      });
+    } else {
+      fallbackCopyText(text);
+    }
+  }
+
+  function fallbackCopyText(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('✓ دستور کپی شد: ' + text);
+    } catch (e) {
+      showToast('خطا در کپی دستور.', 'warn');
+    }
+    document.body.removeChild(ta);
   }
 
   let audioToneEnabled = false;
@@ -4044,6 +4236,11 @@
   window.switchProjectFromSettings = switchProjectFromSettings;
   window.deleteProjectFromSettings = deleteProjectFromSettings;
   window.openChatFromSettings = openChatFromSettings;
+  window.refreshAccountStatus = refreshAccountStatus;
+  window.saveGeminiApiKey = saveGeminiApiKey;
+  window.saveCustomOAuthToken = saveCustomOAuthToken;
+  window.logoutAccount = logoutAccount;
+  window.copyCliAuthCommand = copyCliAuthCommand;
 
   // Helper to bind guaranteed tap/click events
   function bindAction(el, handler) {

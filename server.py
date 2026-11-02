@@ -58,6 +58,7 @@ def get_current_user_profile() -> Dict[str, Any]:
     """Detect currently authenticated Antigravity / Google account dynamically from local system."""
     token_candidates = [
         os.path.expanduser('~/.gemini/jetski-standalone-oauth-token'),
+        '/data/data/com.termux/files/home/.gemini/jetski-standalone-oauth-token',
         os.path.expanduser('~/.gemini/oauth_token.json'),
         os.path.expanduser('~/.config/antigravity/auth.json'),
     ]
@@ -68,20 +69,52 @@ def get_current_user_profile() -> Dict[str, Any]:
                     tok = json.load(f)
                     email = tok.get('id_token_email') or tok.get('email')
                     name = tok.get('name') or (email.split('@')[0].capitalize() if email else '')
-                    if email:
+                    if email and tok.get('token'):
                         return {
-                            "name": name or "کاربر",
+                            "name": name or "کاربر گوگل",
                             "email": email,
                             "avatar": (name[:1] if name else email[:1]).upper(),
-                            "authenticated": True
+                            "authenticated": True,
+                            "auth_method": tok.get('auth_method', 'google_oauth')
                         }
             except Exception:
                 pass
+
+    # Check for Gemini API key file or environment variable
+    api_key_candidates = [
+        os.path.expanduser('~/.gemini/api_key'),
+        '/data/data/com.termux/files/home/.gemini/api_key',
+    ]
+    api_key = os.environ.get('GEMINI_API_KEY')
+    if not api_key:
+        for p in api_key_candidates:
+            if os.path.isfile(p):
+                try:
+                    with open(p, 'r', encoding='utf-8') as f:
+                        k = f.read().strip()
+                        if k:
+                            api_key = k
+                            os.environ['GEMINI_API_KEY'] = k
+                            break
+                except Exception:
+                    pass
+
+    if api_key:
+        masked = api_key[:6] + "..." + api_key[-4:] if len(api_key) > 10 else "******"
+        return {
+            "name": "Gemini API User",
+            "email": f"API Key ({masked})",
+            "avatar": "🔑",
+            "authenticated": True,
+            "auth_method": "gemini_api_key"
+        }
+
     return {
         "name": "کاربر مهمان",
         "email": "وارد نشده (حساب متصل نیست)",
         "avatar": "👤",
-        "authenticated": False
+        "authenticated": False,
+        "auth_method": "offline"
     }
 
 # Available models cache
@@ -1028,9 +1061,24 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
     proc: Optional[asyncio.subprocess.Process] = None
 
     try:
+        sub_env = os.environ.copy()
+        api_key = sub_env.get('GEMINI_API_KEY')
+        if not api_key:
+            for ak_path in [os.path.expanduser('~/.gemini/api_key'), '/data/data/com.termux/files/home/.gemini/api_key']:
+                if os.path.isfile(ak_path):
+                    try:
+                        with open(ak_path, 'r', encoding='utf-8') as f:
+                            ak = f.read().strip()
+                            if ak:
+                                sub_env['GEMINI_API_KEY'] = ak
+                                break
+                    except Exception:
+                        pass
+
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             cwd=cwd,
+            env=sub_env,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
@@ -2162,27 +2210,8 @@ class AntigravityAccountApiHandler(BaseApiHandler):
         self.finish()
 
     def get(self):
-        token_candidates = [
-            os.path.expanduser('~/.gemini/jetski-standalone-oauth-token'),
-            '/data/data/com.termux/files/home/.gemini/jetski-standalone-oauth-token',
-            os.path.expanduser('~/.gemini/antigravity-cli/token')
-        ]
-        email = None
-        auth_method = "consumer"
-        has_token = False
-
-        for path in token_candidates:
-            if os.path.exists(path):
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                        email = data.get('id_token_email')
-                        auth_method = data.get('auth_method', 'consumer')
-                        if data.get('token'):
-                            has_token = True
-                        break
-                except Exception:
-                    pass
+        user = get_current_user_profile()
+        is_logged_in = user.get("authenticated", False)
 
         total_prompt_tokens = 0
         total_thinking_tokens = 0
@@ -2200,28 +2229,28 @@ class AntigravityAccountApiHandler(BaseApiHandler):
                     else:
                         total_response_tokens += int(content_len * 1.3)
 
-        is_logged_in = bool(has_token and email)
         response_data = {
             "logged_in": is_logged_in,
-            "email": email if is_logged_in else "حساب متصل نیست",
-            "auth_method": auth_method if is_logged_in else "offline",
+            "user": user,
+            "email": user.get("email", "حساب متصل نیست"),
+            "auth_method": user.get("auth_method", "offline"),
             "models_quota": [
                 {
                     "id": "gemini-3.8-flash-high",
                     "name": "Gemini 3.8 Flash (High)",
-                    "status": "active",
-                    "rpm_limit": "60 RPM",
-                    "daily_quota": "نامحدود / بدون سقف ساعتی",
-                    "used_percentage": 14,
+                    "status": "active" if is_logged_in else "guest",
+                    "rpm_limit": "60 RPM" if is_logged_in else "محدود",
+                    "daily_quota": "نامحدود / بدون سقف ساعتی" if is_logged_in else "نیاز به اتصال اکانت",
+                    "used_percentage": 14 if is_logged_in else 0,
                     "tier": "Tier 1 - High Priority"
                 },
                 {
                     "id": "claude-sonnet-4-6",
                     "name": "Claude Sonnet 4.6 (Thinking)",
-                    "status": "active",
-                    "rpm_limit": "30 RPM",
-                    "daily_quota": "سهمیه سازمانی Antigravity",
-                    "used_percentage": 22,
+                    "status": "active" if is_logged_in else "guest",
+                    "rpm_limit": "30 RPM" if is_logged_in else "محدود",
+                    "daily_quota": "سهمیه سازمانی Antigravity" if is_logged_in else "نیاز به لاگین",
+                    "used_percentage": 22 if is_logged_in else 0,
                     "tier": "Tier 1 - Deep Reasoning"
                 },
                 {
@@ -2230,14 +2259,14 @@ class AntigravityAccountApiHandler(BaseApiHandler):
                     "status": "ready",
                     "rpm_limit": "45 RPM",
                     "daily_quota": "سهمیه آزاد",
-                    "used_percentage": 8,
+                    "used_percentage": 8 if is_logged_in else 0,
                     "tier": "Tier 2 - Open Model"
                 }
             ],
             "usage": {
-                "total_prompt_tokens": max(total_prompt_tokens, 1420),
-                "total_thinking_tokens": max(total_thinking_tokens, 3850),
-                "total_response_tokens": max(total_response_tokens, 4920),
+                "total_prompt_tokens": max(total_prompt_tokens, 1420) if is_logged_in else 0,
+                "total_thinking_tokens": max(total_thinking_tokens, 3850) if is_logged_in else 0,
+                "total_response_tokens": max(total_response_tokens, 4920) if is_logged_in else 0,
                 "estimated_cost": "$0.00 (رایگان با اکانت گوگل)"
             }
         }
@@ -2248,6 +2277,79 @@ class AntigravityAccountApiHandler(BaseApiHandler):
             body = json.loads(self.request.body.decode('utf-8')) if self.request.body else {}
         except Exception:
             body = {}
+
+        action = body.get("action", "")
+
+        if action == "save_api_key":
+            api_key = body.get("api_key", "").strip()
+            if not api_key:
+                self.set_status(400)
+                self.finish(json.dumps({"ok": False, "error": "کلید API نمی‌تواند خالی باشد."}, ensure_ascii=False))
+                return
+            gemini_dir = os.path.expanduser('~/.gemini')
+            os.makedirs(gemini_dir, exist_ok=True)
+            key_path = os.path.join(gemini_dir, 'api_key')
+            with open(key_path, 'w', encoding='utf-8') as f:
+                f.write(api_key)
+            os.environ['GEMINI_API_KEY'] = api_key
+            user = get_current_user_profile()
+            self.finish(json.dumps({
+                "ok": True,
+                "message": "کلید Gemini API با موفقیت متصل و فعال شد.",
+                "user": user,
+                "logged_in": True
+            }, ensure_ascii=False))
+            return
+
+        elif action == "save_token":
+            raw_token = body.get("token_json", "").strip()
+            if not raw_token:
+                self.set_status(400)
+                self.finish(json.dumps({"ok": False, "error": "محتوای توکن خالی است."}, ensure_ascii=False))
+                return
+            token_path = os.path.expanduser('~/.gemini/jetski-standalone-oauth-token')
+            os.makedirs(os.path.dirname(token_path), exist_ok=True)
+            try:
+                tok_obj = json.loads(raw_token)
+                with open(token_path, 'w', encoding='utf-8') as f:
+                    json.dump(tok_obj, f, indent=2)
+            except Exception:
+                with open(token_path, 'w', encoding='utf-8') as f:
+                    json.dump({"token": raw_token, "id_token_email": "user@connected", "auth_method": "manual"}, f)
+            user = get_current_user_profile()
+            self.finish(json.dumps({
+                "ok": True,
+                "message": "توکن حساب کاربری با موفقیت ثبت شد.",
+                "user": user,
+                "logged_in": True
+            }, ensure_ascii=False))
+            return
+
+        elif action == "logout":
+            token_paths = [
+                os.path.expanduser('~/.gemini/jetski-standalone-oauth-token'),
+                os.path.expanduser('~/.gemini/oauth_token.json'),
+                os.path.expanduser('~/.gemini/api_key'),
+                '/data/data/com.termux/files/home/.gemini/jetski-standalone-oauth-token',
+                '/data/data/com.termux/files/home/.gemini/api_key',
+            ]
+            for p in token_paths:
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
+            os.environ.pop('GEMINI_API_KEY', None)
+            user = get_current_user_profile()
+            self.finish(json.dumps({
+                "ok": True,
+                "message": "با موفقیت از حساب کاربری خارج شدید.",
+                "user": user,
+                "logged_in": False
+            }, ensure_ascii=False))
+            return
+
+        # Fallback legacy handler
         email = body.get("email")
         token = body.get("token")
         if email:

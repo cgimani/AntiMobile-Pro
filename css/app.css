@@ -7291,3 +7291,141 @@ button, .icon-btn, .input-btn, .chip-btn {
   overflow-y: auto;
   margin: 4px 0;
 }
+
+/* =========================================================================
+   Antigravity 2.0 Account & Login Pane Styling
+   ========================================================================= */
+.account-profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #0d0e12;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.account-hero-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #181920;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.account-hero-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.account-hero-name {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: #f3f4f6;
+}
+
+.account-hero-email {
+  font-size: 12.5px;
+  color: #9ca3af;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.account-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #9ca3af;
+  margin-top: 3px;
+}
+
+.login-card-header {
+  margin-bottom: 10px;
+}
+
+.login-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #e5e7eb;
+  margin-bottom: 4px;
+}
+
+.login-card-desc {
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
+.login-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.login-input-row .agy-input {
+  flex: 1;
+  background: #090a0d;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: #fff;
+  outline: none;
+  direction: ltr;
+  text-align: left;
+}
+
+.login-input-row .agy-input:focus {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.cli-command-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #090a0d;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px 14px;
+  direction: ltr;
+}
+
+.cli-command-box code {
+  color: #4ade80;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.agy-btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.agy-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+}
+
+.account-quotas-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

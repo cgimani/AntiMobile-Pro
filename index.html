@@ -272,7 +272,7 @@
             <span>Settings</span>
           </button>
           
-          <div class="agy-user-card" id="sidebarUserCard" onclick="openSettingsModal()">
+          <div class="agy-user-card" id="sidebarUserCard" onclick="openSettingsModal('account')">
             <div class="agy-user-avatar">
               <span id="userAvatarText">👤</span>
             </div>
@@ -710,13 +710,38 @@
         <div class="agy-settings-sidebar">
           <div class="agy-settings-nav-section">
             <div class="agy-settings-nav-header desktop-only">Settings</div>
-            <button type="button" class="agy-settings-nav-item active" data-tab="projects" onclick="switchSettingsTab('projects')">Projects & Chats</button>
-            <button type="button" class="agy-settings-nav-item" data-tab="general" onclick="switchSettingsTab('general')">General</button>
-            <button type="button" class="agy-settings-nav-item" data-tab="models" onclick="switchSettingsTab('models')">Models</button>
+            <button type="button" class="agy-settings-nav-item active" data-tab="account" onclick="switchSettingsTab('account')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-inline-end: 6px; vertical-align: -2px;">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              Account & Login
+            </button>
+            <button type="button" class="agy-settings-nav-item" data-tab="projects" onclick="switchSettingsTab('projects')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-inline-end: 6px; vertical-align: -2px;">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              Projects & Chats
+            </button>
+            <button type="button" class="agy-settings-nav-item" data-tab="general" onclick="switchSettingsTab('general')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-inline-end: 6px; vertical-align: -2px;">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+              General
+            </button>
+            <button type="button" class="agy-settings-nav-item" data-tab="models" onclick="switchSettingsTab('models')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-inline-end: 6px; vertical-align: -2px;">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+              Models
+            </button>
           </div>
 
           <div class="agy-settings-sidebar-bottom desktop-only">
-            <div class="agy-settings-user-card" id="settingsUserCard">
+            <div class="agy-settings-user-card" id="settingsUserCard" onclick="switchSettingsTab('account')" style="cursor: pointer;" title="ورود و مدیریت حساب">
               <div class="agy-user-avatar" id="settingsUserAvatar">👤</div>
               <div class="agy-user-details">
                 <div class="agy-user-name" id="settingsUserName">کاربر مهمان</div>
@@ -735,8 +760,107 @@
             </svg>
           </button>
 
+          <!-- Tab: Account & Authentication (Active by Default) -->
+          <div class="agy-settings-pane active" id="pane-account">
+            <div class="agy-pane-header">
+              <h2 class="agy-pane-title">Account & Authentication</h2>
+              <p class="agy-pane-desc">مدیریت حساب کاربری، ورود به Google Antigravity و اتصال کلید API هوش مصنوعی</p>
+            </div>
+
+            <!-- Profile Overview Hero Card -->
+            <div class="agy-setting-group">
+              <div class="account-profile-hero" id="accountHeroCard">
+                <div class="account-hero-avatar" id="accountHeroAvatar">👤</div>
+                <div class="account-hero-meta">
+                  <div class="account-hero-name" id="accountHeroName">کاربر مهمان</div>
+                  <div class="account-hero-email" id="accountHeroEmail">وارد نشده (حساب متصل نیست)</div>
+                  <div class="account-hero-badge">
+                    <span class="status-indicator-dot offline" id="accountHeroStatusDot"></span>
+                    <span id="accountHeroStatusText">حالت مهمان / آفلاین</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Logged In Actions (Shown only when authenticated) -->
+            <div class="agy-setting-group" id="accountLoggedInSection" style="display: none;">
+              <div class="agy-group-title">مدیریت اتصال فعال</div>
+              <div class="agy-setting-card">
+                <div class="agy-setting-row" style="padding: 12px 14px; width: 100%;">
+                  <div class="agy-row-info">
+                    <div class="agy-row-label">خروج از حساب فعلی</div>
+                    <div class="agy-row-desc">توکن و اتصال حساب از روی این دستگاه حذف شده و به حالت مهمان بازمی‌گردید.</div>
+                  </div>
+                  <div class="agy-row-control">
+                    <button type="button" class="agy-btn-danger" onclick="logoutAccount()">خروج از حساب</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Login Options (Shown when unauthenticated or for switching) -->
+            <div class="agy-setting-group" id="accountLoginSection">
+              <div class="agy-group-title">روش‌های ورود و فعال‌سازی حساب</div>
+              
+              <!-- Method 1: Gemini API Key (Direct & Instant) -->
+              <div class="agy-setting-card" style="margin-bottom: 12px; flex-direction: column; align-items: stretch;">
+                <div class="login-card-header">
+                  <div class="login-card-title">🔑 روش ۱: ورود سریع با Gemini API Key (توصیه‌شده و فوری)</div>
+                  <div class="login-card-desc">سریع‌ترین و مطمئن‌ترین روش برای گوشی و ترموکس بدون نیاز به ورود تحت وب. کلید خود را وارد کنید تا تمام مدل‌های جمینای در لحظه فعال شوند.</div>
+                </div>
+                <div class="login-input-row">
+                  <input type="password" id="inputGeminiApiKey" class="agy-input" placeholder="کلید API را اینجا جای‌گذاری کنید (AIzaSy...)" autocomplete="off">
+                  <button type="button" class="agy-btn-mono" id="btnSaveApiKey" onclick="saveGeminiApiKey()">✓ فعال‌سازی</button>
+                </div>
+                <div style="font-size: 11.5px; color: #888; margin-top: 6px;">
+                  💡 برای دریافت رایگان کلید، به <a href="https://aistudio.google.com/apikey" target="_blank" style="color: #60a5fa; text-decoration: underline;">Google AI Studio</a> بروید.
+                </div>
+              </div>
+
+              <!-- Method 2: Termux / CLI Google Sign-In -->
+              <div class="agy-setting-card" style="margin-bottom: 12px; flex-direction: column; align-items: stretch;">
+                <div class="login-card-header">
+                  <div class="login-card-title">📱 روش ۲: ورود رسمی با حساب گوگل در ترموکس</div>
+                  <div class="login-card-desc">برای اتصال رسمی به اشتراک Antigravity، دستور زیر را در ترموکس اجرا کنید:</div>
+                </div>
+                <div class="cli-command-box">
+                  <code id="cliAuthCommandText">agy --prompt "login"</code>
+                  <button type="button" class="agy-btn-mono" onclick="copyCliAuthCommand()">📋 کپی</button>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px; flex-wrap: wrap; gap: 8px;">
+                  <span style="font-size: 11.5px; color: #888;">پس از تایید در مرورگر گوشی، دکمه بررسی را بزنید:</span>
+                  <button type="button" class="agy-btn-mono" onclick="refreshAccountStatus(true)">🔄 بررسی وضعیت اتصال</button>
+                </div>
+              </div>
+
+              <!-- Method 3: Direct OAuth JSON / Custom Token -->
+              <div class="agy-setting-card" style="flex-direction: column; align-items: stretch;">
+                <div class="login-card-header">
+                  <div class="login-card-title">📄 روش ۳: ورود دستی با فایل یا توکن OAuth</div>
+                  <div class="login-card-desc">اگر محتویات فایل توکن (jetski-standalone-oauth-token) را دارید، می‌توانید در این کادر قرار دهید:</div>
+                </div>
+                <div style="margin-top: 8px;">
+                  <textarea id="inputCustomTokenJson" class="agy-input" style="height: 64px; font-family: monospace; font-size: 11px; resize: vertical;" placeholder='{"id_token_email": "user@gmail.com", "token": "..."}'></textarea>
+                </div>
+                <div style="margin-top: 8px; display: flex; justify-content: flex-end;">
+                  <button type="button" class="agy-btn-mono" onclick="saveCustomOAuthToken()">ثبت فایل توکن</button>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Live Models Quota & Token Usage -->
+            <div class="agy-setting-group">
+              <div class="agy-group-title">سهمیه مدل‌ها و آمار مصرف توکن</div>
+              <div class="account-quotas-wrapper" id="accountSettingsQuotasList">
+                <!-- Dynamically rendered quota cards -->
+              </div>
+            </div>
+
+          </div>
+
           <!-- Tab: Projects & Chats Management -->
-          <div class="agy-settings-pane active" id="pane-projects">
+          <div class="agy-settings-pane" id="pane-projects">
             <div class="agy-pane-header">
               <h2 class="agy-pane-title">Projects & Chats</h2>
               <p class="agy-pane-desc">Manage project workspaces, customize folder paths, and delete or organize conversation histories.</p>
