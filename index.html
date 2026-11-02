@@ -776,18 +776,48 @@
 
           <!-- Tab: Account & Authentication (Active by Default) -->
           <div class="agy-settings-pane active" id="pane-account">
-            <div class="agy-pane-header">
-              <h2 class="agy-pane-title">Account & Authentication</h2>
-              <p class="agy-pane-desc">مدیریت حساب کاربری، ورود به Google Antigravity و اتصال کلید API هوش مصنوعی</p>
+            <!-- Antigravity Brand Hero Header -->
+            <div class="agy-auth-header-card">
+              <div class="agy-auth-brand-logo">
+                <svg width="44" height="44" viewBox="0 0 64 64" fill="none">
+                  <defs>
+                    <radialGradient id="agyBrandBg" cx="50%" cy="40%" r="60%">
+                      <stop offset="0%" stop-color="#141824" />
+                      <stop offset="100%" stop-color="#090b10" />
+                    </radialGradient>
+                    <linearGradient id="agyBrandRim" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6" />
+                      <stop offset="100%" stop-color="#a855f7" stop-opacity="0.3" />
+                    </linearGradient>
+                  </defs>
+                  <rect width="64" height="64" rx="16" fill="url(#agyBrandBg)" stroke="url(#agyBrandRim)" stroke-width="1.5"/>
+                  <g transform="translate(1.5, 0.4) scale(0.55)">
+                    <path d="M89.6992 93.695C94.3659 97.195 101.366 94.8617 94.9492 88.445C75.6992 69.7783 79.7825 18.445 55.8659 18.445C31.9492 18.445 36.0325 69.7783 16.7825 88.445C9.78251 95.445 17.3658 97.195 22.0325 93.695C40.1159 81.445 38.9492 59.8617 55.8659 59.8617C72.7825 59.8617 71.6159 81.445 89.6992 93.695Z" fill="#3186FF" />
+                    <path d="M55.8659 18.445C31.9492 18.445 36.0325 69.7783 16.7825 88.445C9.78251 95.445 17.3658 97.195 22.0325 93.695C40.1159 81.445 38.9492 59.8617 55.8659 59.8617" stroke="#22d3ee" stroke-width="3" stroke-linecap="round" fill="none" />
+                    <path d="M55.8659 18.445C79.7825 18.445 75.6992 69.7783 94.9492 88.445C101.366 94.8617 94.3659 97.195 89.6992 93.695C71.6159 81.445 72.7825 59.8617 55.8659 59.8617" stroke="#a855f7" stroke-width="3" stroke-linecap="round" fill="none" />
+                  </g>
+                </svg>
+              </div>
+              <div class="agy-auth-brand-text">
+                <div class="agy-auth-brand-title">
+                  <span>Google Antigravity</span>
+                  <span class="agy-auth-brand-tag">PRO</span>
+                </div>
+                <div class="agy-auth-brand-subtitle">احراز هویت رسمی ابری و اتصال یکپارچه مدل‌های نسل ۳.۸</div>
+              </div>
             </div>
 
             <!-- Profile Overview Hero Card -->
-            <div class="agy-setting-group">
-              <div class="account-profile-hero" id="accountHeroCard" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-                <div style="display: flex; align-items: center; gap: 14px;">
-                  <div class="account-hero-avatar" id="accountHeroAvatar">👤</div>
+            <div class="agy-setting-group" style="margin-bottom: 16px;">
+              <div class="account-profile-hero" id="accountHeroCard">
+                <div class="account-hero-left">
+                  <div class="account-hero-avatar-ring">
+                    <div class="account-hero-avatar" id="accountHeroAvatar">👤</div>
+                  </div>
                   <div class="account-hero-meta">
-                    <div class="account-hero-name" id="accountHeroName">کاربر مهمان</div>
+                    <div class="account-hero-name-row">
+                      <span class="account-hero-name" id="accountHeroName">کاربر مهمان</span>
+                    </div>
                     <div class="account-hero-email" id="accountHeroEmail">وارد نشده (حساب متصل نیست)</div>
                     <div class="account-hero-badge">
                       <span class="status-indicator-dot offline" id="accountHeroStatusDot"></span>
@@ -795,126 +825,170 @@
                     </div>
                   </div>
                 </div>
-                <button type="button" class="agy-btn-danger" id="btnHeroQuickLogout" onclick="logoutAccount()" style="display: none; padding: 7px 14px; font-size: 12.5px; border-radius: 6px;">🚪 خروج از حساب</button>
+                <div class="account-hero-actions">
+                  <button type="button" class="agy-btn-danger" id="btnHeroQuickLogout" onclick="logoutAccount()" style="display: none;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-inline-end: 5px; vertical-align: -2px;">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                      <polyline points="16 17 21 12 16 7"></polyline>
+                      <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    خروج از حساب
+                  </button>
+                </div>
               </div>
             </div>
 
-            <!-- Logged In Actions (Shown only when authenticated) -->
-            <div class="agy-setting-group" id="accountLoggedInSection" style="display: none;">
-              <div class="agy-group-title">مدیریت اتصال فعال</div>
-              <div class="agy-setting-card">
-                <div class="agy-setting-row" style="padding: 12px 14px; width: 100%;">
-                  <div class="agy-row-info">
-                    <div class="agy-row-label">خروج از حساب فعلی</div>
-                    <div class="agy-row-desc">توکن و اتصال حساب از روی این دستگاه حذف شده و به حالت مهمان بازمی‌گردید.</div>
+            <!-- Logged In Actions & Security Details (Shown only when authenticated) -->
+            <div class="agy-setting-group" id="accountLoggedInSection" style="display: none; margin-bottom: 16px;">
+              <div class="agy-group-title">امنیت اتصال و وضعیت سهمیه</div>
+              <div class="agy-setting-card" style="flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px;">
+                <div class="agy-auth-features-strip">
+                  <div class="agy-auth-feature-pill">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span>سندباکس محلی Termux</span>
                   </div>
-                  <div class="agy-row-control">
-                    <button type="button" class="agy-btn-danger" onclick="logoutAccount()">خروج از حساب</button>
+                  <div class="agy-auth-feature-pill">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <span>Gemini 3.8 Flash (High)</span>
                   </div>
+                  <div class="agy-auth-feature-pill">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    <span>سهمیه ۶۰ RPM آزاد</span>
+                  </div>
+                  <div class="agy-auth-feature-pill">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <span>توکن رمزنگاری آفلاین</span>
+                  </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px; margin-top: 4px;">
+                  <div style="font-size: 12px; color: #94a3b8;">اتصال فعال با اکانت گوگل. در صورت خروج به حالت مهمان منتقل می‌شوید.</div>
+                  <button type="button" class="agy-btn-danger" onclick="logoutAccount()">خروج کامل از حساب</button>
                 </div>
               </div>
             </div>
 
             <!-- Login Options (Shown when unauthenticated or for switching) -->
             <div class="agy-setting-group" id="accountLoginSection">
-              <div class="agy-group-title">روش‌های ورود و فعال‌سازی حساب</div>
+              <div class="agy-group-title">روش‌های ورود و احراز هویت Antigravity</div>
               
               <!-- Method 1: In-App Interactive Google OAuth (Automated Background CLI Bridge) -->
-              <div class="agy-setting-card" style="margin-bottom: 14px; flex-direction: column; align-items: stretch;">
-                <div class="login-card-header">
-                  <div class="login-card-title">🌐 روش ۱: ورود هوشمند به حساب گوگل (بدون نیاز به باز کردن ترموکس)</div>
-                  <div class="login-card-desc">با زدن دکمه زیر، نشست لاگین در پس‌زمینه اجرا شده و لینک ورود رسمی گوگل مستقیماً در این پنجره برای شما ایجاد می‌شود.</div>
+              <div class="agy-login-card-featured">
+                <div class="login-card-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                  <div>
+                    <div class="login-card-title" style="display: flex; align-items: center; gap: 8px;">
+                      <span style="color: #60a5fa; font-weight: 700;">روش اصلی: ورود مستقیم با اکانت گوگل</span>
+                      <span style="font-size: 10px; background: rgba(59, 130, 246, 0.2); color: #93c5fd; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.35);">پیشنهادی</span>
+                    </div>
+                    <div class="login-card-desc">اتصال رسمی به موتور CLI گوگل بدون نیاز به باز کردن ترموکس یا دستورات دستی. سهمیه تمام مدل‌ها بلافاصله آنلاک می‌شود.</div>
+                  </div>
                 </div>
 
-                <!-- Step 0: Idle State -->
-                <div id="cliLoginIdleBox" style="margin-top: 8px;">
+                <!-- Step 0: Idle State Button -->
+                <div id="cliLoginIdleBox" style="margin-top: 12px;">
                   <button type="button" class="agy-btn-google-login" id="btnStartGoogleLogin" onclick="startCliLoginFlow()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" style="margin-inline-end: 8px; vertical-align: -3px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" style="margin-inline-end: 10px; vertical-align: -4px;">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                     </svg>
-                    ورود به حساب کاربری گوگل
+                    ورود با حساب کاربری گوگل
                   </button>
                 </div>
 
                 <!-- Step 1: Loading State -->
-                <div id="cliLoginLoadingBox" style="display: none; padding: 18px 12px; text-align: center;">
-                  <div class="agy-auth-spinner"></div>
-                  <div style="font-size: 13.5px; font-weight: 500; color: #e5e7eb; margin-top: 10px;">در حال اجرای نشست ورود در پس‌زمینه...</div>
-                  <div style="font-size: 12px; color: #9ca3af; margin-top: 4px;">دریافت لینک اختصاصی گوگل (چند ثانیه)...</div>
+                <div id="cliLoginLoadingBox" style="display: none; padding: 22px 14px; text-align: center;">
+                  <div class="agy-auth-neon-spinner"></div>
+                  <div style="font-size: 14px; font-weight: 600; color: #f8fafc; margin-top: 6px;">در حال اجرای نشست امن در پس‌زمینه...</div>
+                  <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">دریافت لینک اختصاصی گوگل از موتور Antigravity...</div>
                 </div>
 
-                <!-- Step 2: URL & Code Input Container -->
-                <div id="cliLoginActiveBox" style="display: none; margin-top: 8px;">
-                  <!-- Sub-step A: Open Link -->
-                  <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
-                    <div style="font-size: 13px; font-weight: 600; color: #60a5fa; margin-bottom: 6px;">مرحله ۱: باز کردن صفحه ورود گوگل</div>
-                    <div style="font-size: 12px; color: #d1d5db; line-height: 1.5; margin-bottom: 10px;">
-                      روی دکمه زیر کلیک کنید تا صفحه رسمی ورود گوگل در مرورگر باز شود. پس از تایید دسترسی، کدی که گوگل نمایش می‌دهد را کپی کنید.
+                <!-- Step 2: Active URL & Code Container -->
+                <div id="cliLoginActiveBox" style="display: none; margin-top: 12px;">
+                  <!-- Sub-step 1: Open Link -->
+                  <div class="agy-login-step-card">
+                    <div class="agy-login-step-title">
+                      <span>مرحله ۱: تایید هویت در گوگل</span>
+                    </div>
+                    <div class="agy-login-step-desc">
+                      روی دکمه آبی زیر کلیک کنید تا صفحه رسمی ورود گوگل باز شود. پس از انتخاب اکانت، کدی که گوگل در صفحه نمایش می‌دهد را کپی کنید.
                     </div>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                      <a id="btnOpenAuthUrlLink" href="#" target="_blank" class="agy-btn-mono" style="background: #2563eb; color: #fff; border: none; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-weight: 500;">
-                        🔗 باز کردن صفحه ورود گوگل
+                      <a id="btnOpenAuthUrlLink" href="#" target="_blank" class="agy-btn-google-action">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        ورود به صفحه رسمی گوگل
                       </a>
-                      <button type="button" class="agy-btn-mono" onclick="copyGoogleAuthUrl()">📋 کپی لینک ورود</button>
+                      <button type="button" class="agy-btn-mono" onclick="copyGoogleAuthUrl()">
+                        📋 کپی لینک ورود
+                      </button>
                     </div>
                   </div>
 
-                  <!-- Sub-step B: Enter Code -->
-                  <div style="background: #090a0d; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 12px 14px;">
-                    <div style="font-size: 13px; font-weight: 600; color: #e5e7eb; margin-bottom: 6px;">مرحله ۲: وارد کردن کد تایید گوگل</div>
-                    <div style="font-size: 12px; color: #9ca3af; margin-bottom: 8px;">
+                  <!-- Sub-step 2: Enter Verification Code -->
+                  <div class="agy-login-step-card" style="border-color: rgba(16, 185, 129, 0.3);">
+                    <div class="agy-login-step-title" style="color: #34d399;">
+                      <span>مرحله ۲: وارد کردن کد تایید گوگل</span>
+                    </div>
+                    <div class="agy-login-step-desc">
                       کد دریافتی از گوگل (یا آدرس نهایی مرورگر که شامل code= است) را در کادر زیر قرار دهید:
                     </div>
                     <div class="login-input-row">
-                      <input type="text" id="inputCliAuthCode" class="agy-input" placeholder="کد تایید گوگل (4/0A...)" autocomplete="off">
-                      <button type="button" class="agy-btn-mono" id="btnSubmitAuthCode" onclick="submitCliAuthCode()" style="background: #10b981; color: #fff; border: none; padding: 8px 14px; font-weight: 600;">✓ تایید و فعال‌سازی</button>
+                      <input type="text" id="inputCliAuthCode" class="agy-input" placeholder="کد تایید گوگل (4/0A...) یا لینک نهایی" autocomplete="off">
+                      <button type="button" class="agy-btn-activate-success" id="btnSubmitAuthCode" onclick="submitCliAuthCode()">
+                        ✓ تایید و فعال‌سازی
+                      </button>
                     </div>
                   </div>
 
-                  <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-                    <button type="button" class="agy-btn-mono" style="color: #9ca3af; font-size: 11.5px;" onclick="cancelCliLoginFlow()">انصراف</button>
+                  <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                    <button type="button" class="agy-btn-mono" style="color: #94a3b8; font-size: 11.5px;" onclick="cancelCliLoginFlow()">انصراف از ورود</button>
                   </div>
                 </div>
 
               </div>
 
-              <!-- Method 2: Gemini API Key (Direct & Instant) -->
-              <div class="agy-setting-card" style="margin-bottom: 14px; flex-direction: column; align-items: stretch;">
-                <div class="login-card-header">
-                  <div class="login-card-title">🔑 روش ۲: ورود با Gemini API Key (سریع و بدون نیاز به ورود گوگل)</div>
-                  <div class="login-card-desc">سریع‌ترین روش بدون نیاز به ورود به مرورگر. کلید خود را وارد کنید تا تمام مدل‌های جمینای در لحظه فعال شوند.</div>
-                </div>
-                <div class="login-input-row">
-                  <input type="password" id="inputGeminiApiKey" class="agy-input" placeholder="کلید API را اینجا جای‌گذاری کنید (AIzaSy...)" autocomplete="off">
-                  <button type="button" class="agy-btn-mono" id="btnSaveApiKey" onclick="saveGeminiApiKey()">✓ فعال‌سازی</button>
-                </div>
-                <div style="font-size: 11.5px; color: #888; margin-top: 6px;">
-                  💡 برای دریافت رایگان کلید، به <a href="https://aistudio.google.com/apikey" target="_blank" style="color: #60a5fa; text-decoration: underline;">Google AI Studio</a> بروید.
-                </div>
-              </div>
+              <!-- Secondary Methods Accordion -->
+              <details class="agy-auth-accordion">
+                <summary class="agy-auth-accordion-summary">
+                  <span style="display: flex; align-items: center; gap: 8px;">
+                    <span>🔑 روش‌های ورود جایگزین (Gemini API Key و توکن دستی)</span>
+                  </span>
+                  <span style="font-size: 12px; color: #94a3b8;">تغییر روش ▾</span>
+                </summary>
+                <div class="agy-auth-accordion-body">
+                  <!-- Method 2: Gemini API Key -->
+                  <div style="margin-bottom: 16px;">
+                    <div class="login-card-title">🔑 ورود سریع با Gemini API Key</div>
+                    <div class="login-card-desc" style="margin-bottom: 8px;">کلید خود را وارد کنید تا تمام مدل‌های جمینای بدون نیاز به ورود به مرورگر فعال شوند.</div>
+                    <div class="login-input-row">
+                      <input type="password" id="inputGeminiApiKey" class="agy-input" placeholder="AIzaSy..." autocomplete="off">
+                      <button type="button" class="agy-btn-mono" id="btnSaveApiKey" onclick="saveGeminiApiKey()">✓ فعال‌سازی</button>
+                    </div>
+                    <div style="font-size: 11.5px; color: #888; margin-top: 6px;">
+                      💡 دریافت رایگان کلید از <a href="https://aistudio.google.com/apikey" target="_blank" style="color: #60a5fa; text-decoration: underline;">Google AI Studio</a>
+                    </div>
+                  </div>
 
-              <!-- Method 3: Direct OAuth JSON / Custom Token -->
-              <div class="agy-setting-card" style="flex-direction: column; align-items: stretch;">
-                <div class="login-card-header">
-                  <div class="login-card-title">📄 روش ۳: ورود دستی با فایل یا توکن OAuth</div>
-                  <div class="login-card-desc">اگر محتویات فایل توکن (jetski-standalone-oauth-token) را دارید، می‌توانید در این کادر قرار دهید:</div>
+                  <!-- Method 3: Direct OAuth JSON / Custom Token -->
+                  <div style="border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 14px;">
+                    <div class="login-card-title">📄 ورود دستی با فایل توکن (OAuth JSON)</div>
+                    <div class="login-card-desc" style="margin-bottom: 8px;">محتوای خام فایل توکن را اینجا جای‌گذاری کنید:</div>
+                    <div>
+                      <textarea id="inputCustomTokenJson" class="agy-input" style="height: 64px; font-family: monospace; font-size: 11px; resize: vertical;" placeholder='{"id_token_email": "user@gmail.com", "token": "..."}'></textarea>
+                    </div>
+                    <div style="margin-top: 8px; display: flex; justify-content: flex-end;">
+                      <button type="button" class="agy-btn-mono" onclick="saveCustomOAuthToken()">ثبت فایل توکن</button>
+                    </div>
+                  </div>
                 </div>
-                <div style="margin-top: 8px;">
-                  <textarea id="inputCustomTokenJson" class="agy-input" style="height: 64px; font-family: monospace; font-size: 11px; resize: vertical;" placeholder='{"id_token_email": "user@gmail.com", "token": "..."}'></textarea>
-                </div>
-                <div style="margin-top: 8px; display: flex; justify-content: flex-end;">
-                  <button type="button" class="agy-btn-mono" onclick="saveCustomOAuthToken()">ثبت فایل توکن</button>
-                </div>
-              </div>
+              </details>
 
             </div>
 
             <!-- Live Models Quota & Token Usage -->
             <div class="agy-setting-group">
-              <div class="agy-group-title">سهمیه مدل‌ها و آمار مصرف توکن</div>
+              <div class="agy-group-title">⚡ سهمیه مدل‌ها و ظرفیت هوش مصنوعی Antigravity</div>
               <div class="account-quotas-wrapper" id="accountSettingsQuotasList">
                 <!-- Dynamically rendered quota cards -->
               </div>

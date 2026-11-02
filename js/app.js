@@ -3931,11 +3931,15 @@
         if (heroStatusText) {
           heroStatusText.textContent = isLoggedIn ? `متصل (${data.auth_method || 'آنلاین'})` : 'حالت مهمان / آفلاین';
         }
+        const heroVerifiedBadge = document.getElementById('accountHeroVerifiedBadge');
+        if (heroVerifiedBadge) {
+          heroVerifiedBadge.style.display = isLoggedIn ? 'inline-flex' : 'none';
+        }
         if (loggedInSection) {
           loggedInSection.style.display = isLoggedIn ? 'block' : 'none';
         }
         if (heroQuickLogout) {
-          heroQuickLogout.style.display = isLoggedIn ? 'inline-block' : 'none';
+          heroQuickLogout.style.display = isLoggedIn ? 'inline-flex' : 'none';
         }
 
         // Sync Sidebar & Settings Footer
@@ -3969,7 +3973,7 @@
           btnQuotaLogout.style.display = isLoggedIn ? 'inline-flex' : 'none';
         }
 
-        // Render Quotas
+        // Render Quotas with Antigravity Design
         const quotasContainer = document.getElementById('accountSettingsQuotasList');
         if (quotasContainer && data.models_quota) {
           quotasContainer.innerHTML = '';
@@ -3979,15 +3983,19 @@
             card.style.flexDirection = 'column';
             card.style.alignItems = 'stretch';
             card.style.gap = '8px';
+            const tierColor = m.id.includes('flash') ? '#38bdf8' : (m.id.includes('claude') ? '#c084fc' : '#34d399');
+            const progressBg = m.id.includes('flash') 
+              ? 'linear-gradient(90deg, #38bdf8, #818cf8)' 
+              : (m.id.includes('claude') ? 'linear-gradient(90deg, #818cf8, #c084fc)' : 'linear-gradient(90deg, #10b981, #34d399)');
             card.innerHTML = `
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-weight: 600; font-size: 13.5px; color: #fff;">${m.name}</span>
-                <span style="font-size: 11px; color: ${isLoggedIn ? '#4ade80' : '#9ca3af'}; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 4px;">${m.tier || ''}</span>
+                <span style="font-weight: 600; font-size: 13.5px; color: #f8fafc;">${m.name}</span>
+                <span style="font-size: 10.5px; font-weight: 600; color: ${isLoggedIn ? tierColor : '#9ca3af'}; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 999px;">${m.tier || ''}</span>
               </div>
-              <div style="width: 100%; height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
-                <div style="width: ${m.used_percentage || 0}%; height: 100%; background: ${isLoggedIn ? '#60a5fa' : '#6b7280'};"></div>
+              <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden;">
+                <div style="width: ${m.used_percentage || 0}%; height: 100%; background: ${isLoggedIn ? progressBg : '#6b7280'}; border-radius: 999px;"></div>
               </div>
-              <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #9ca3af;">
+              <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #94a3b8;">
                 <span>سقف مجاز: ${m.rpm_limit}</span>
                 <span>سهمیه: ${m.daily_quota}</span>
               </div>
