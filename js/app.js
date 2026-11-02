@@ -237,7 +237,8 @@
     };
 
     renderer.blockquote = function (quote) {
-      const clean = quote.trim();
+      const str = (typeof quote === 'string') ? quote : (quote?.text || '');
+      const clean = str.trim();
       const alertMap = [
         { tag: '[!NOTE]', type: 'note', title: 'یادداشت', icon: 'ℹ️' },
         { tag: '[!TIP]', type: 'tip', title: 'نکته', icon: '💡' },
@@ -256,7 +257,7 @@
           `;
         }
       }
-      return `<blockquote>${quote}</blockquote>`;
+      return `<blockquote>${str}</blockquote>`;
     };
 
     renderer.link = function (href, title, text) {
@@ -684,6 +685,81 @@
       try { navigator.vibrate(ms); } catch (e) {}
     }
   }
+
+  // Lightweight Toast Notification System
+  function showToast(msg, type = 'info') {
+    if (!msg) return;
+    try {
+      let container = document.getElementById('agyToastContainer');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'agyToastContainer';
+        container.style.cssText = `
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 999999;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          pointer-events: none;
+          max-width: 90vw;
+          width: max-content;
+        `;
+        document.body.appendChild(container);
+      }
+
+      const toast = document.createElement('div');
+      toast.className = `agy-toast agy-toast-${type}`;
+      
+      const colors = {
+        success: { bg: '#064e3b', border: '#059669', text: '#ecfdf5' },
+        error: { bg: '#7f1d1d', border: '#dc2626', text: '#fef2f2' },
+        warn: { bg: '#78350f', border: '#d97706', text: '#fffbeb' },
+        info: { bg: '#1e293b', border: '#3b82f6', text: '#f8fafc' }
+      };
+      const theme = colors[type] || colors.info;
+
+      toast.style.cssText = `
+        background: ${theme.bg};
+        border: 1px solid ${theme.border};
+        color: ${theme.text};
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        opacity: 0;
+        transform: translateY(-8px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        pointer-events: auto;
+        direction: rtl;
+        text-align: right;
+      `;
+      toast.textContent = msg;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+      });
+
+      triggerHaptic(15);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-8px)';
+        setTimeout(() => {
+          if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 250);
+      }, 3500);
+    } catch (e) {
+      console.log('[Toast]', type, msg);
+    }
+  }
+
+  window.showToast = showToast;
 
   // Create Antigravity 2.0 Minimal Thinking Accordion Element
   function createThinkingAccordion(thinkingText, duration, tokens, isLive = false) {
