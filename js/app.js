@@ -3941,6 +3941,10 @@
         if (heroQuickLogout) {
           heroQuickLogout.style.display = isLoggedIn ? 'inline-flex' : 'none';
         }
+        const btnGoogleLoginText = document.getElementById('btnGoogleLoginText');
+        if (btnGoogleLoginText) {
+          btnGoogleLoginText.textContent = isLoggedIn ? 'تعویض یا اتصال مجدد با اکانت گوگل' : 'ورود با حساب کاربری گوگل';
+        }
 
         // Sync Sidebar & Settings Footer
         const sidebarName = document.getElementById('sidebarUserName');
