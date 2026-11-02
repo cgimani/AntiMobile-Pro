@@ -66,7 +66,9 @@ def get_current_user_profile() -> Dict[str, Any]:
         os.path.expanduser('~/.gemini/jetski-standalone-oauth-token'),
         '/data/data/com.termux/files/home/.gemini/jetski-standalone-oauth-token',
         os.path.expanduser('~/.gemini/oauth_token.json'),
+        '/data/data/com.termux/files/home/.gemini/oauth_token.json',
         os.path.expanduser('~/.config/antigravity/auth.json'),
+        '/data/data/com.termux/files/home/.config/antigravity/auth.json',
     ]
     for path in token_candidates:
         if os.path.isfile(path):
@@ -2481,9 +2483,25 @@ class CliLoginManager:
                 pass
 
             self._tmp_auth_dir = tempfile.mkdtemp(prefix='antimobile_oauth_')
+            
+            # Shadow browser-opening binaries so agy does not steal focus / crash on Android Termux
+            bin_dir = os.path.join(self._tmp_auth_dir, 'bin')
+            os.makedirs(bin_dir, exist_ok=True)
+            dummy_script = "#!/bin/sh\nexit 0\n"
+            for tool in ['termux-open-url', 'xdg-open', 'x-www-browser']:
+                tool_p = os.path.join(bin_dir, tool)
+                try:
+                    with open(tool_p, 'w') as f:
+                        f.write(dummy_script)
+                    os.chmod(tool_p, 0o755)
+                except Exception:
+                    pass
+
             sub_env = os.environ.copy()
             sub_env['HOME'] = self._tmp_auth_dir
             sub_env['XDG_CONFIG_HOME'] = os.path.join(self._tmp_auth_dir, '.config')
+            sub_env['PATH'] = f"{bin_dir}:{sub_env.get('PATH', '')}"
+            sub_env['BROWSER'] = 'true'
             sub_env.pop('GEMINI_API_KEY', None)
             sub_env.pop('GOOGLE_API_KEY', None)
             sub_env.pop('GOOGLE_APPLICATION_CREDENTIALS', None)

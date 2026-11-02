@@ -3900,6 +3900,7 @@
       renderSettingsProjectsList();
     } else if (tabName === 'account') {
       refreshAccountStatus();
+      checkCliLoginSession();
     }
   }
 
@@ -3997,6 +3998,12 @@
 
         if (forceToast) {
           showToast(isLoggedIn ? `✓ متصل به حساب: ${user.name || user.email}` : 'وضعیت: حساب کاربری متصل نیست');
+        }
+
+        if (isLoggedIn) {
+          resetCliLoginUI();
+        } else {
+          checkCliLoginSession();
         }
       }
     } catch (e) {
@@ -4150,6 +4157,34 @@
   let cliAuthUrl = '';
   let cliLoginPollTimer = null;
 
+  async function checkCliLoginSession() {
+    try {
+      const res = await fetch('/api/auth/cli-login/status');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.ok && data.state === 'waiting_code' && data.auth_url) {
+        cliAuthUrl = data.auth_url;
+        setupCliLoginActiveUI(data.auth_url);
+      } else if (data.ok && data.state === 'running') {
+        const idleBox = document.getElementById('cliLoginIdleBox');
+        const loadingBox = document.getElementById('cliLoginLoadingBox');
+        const activeBox = document.getElementById('cliLoginActiveBox');
+        if (idleBox) idleBox.style.display = 'none';
+        if (loadingBox) loadingBox.style.display = 'block';
+        if (activeBox) activeBox.style.display = 'none';
+        pollCliLoginStatus();
+      } else if (data.ok && data.state === 'idle') {
+        const activeBox = document.getElementById('cliLoginActiveBox');
+        const loadingBox = document.getElementById('cliLoginLoadingBox');
+        if ((activeBox && activeBox.style.display === 'block') || (loadingBox && loadingBox.style.display === 'block')) {
+          resetCliLoginUI();
+        }
+      }
+    } catch (e) {
+      console.warn('[CliLogin] check error:', e);
+    }
+  }
+
   async function startCliLoginFlow() {
     const idleBox = document.getElementById('cliLoginIdleBox');
     const loadingBox = document.getElementById('cliLoginLoadingBox');
@@ -4160,15 +4195,16 @@
     if (activeBox) activeBox.style.display = 'none';
 
     try {
-      showToast('در حال اجرای نشست ورود در پس‌زمینه...', 'info');
+      showToast('در حال شروع نشست ورود گوگل در پس‌زمینه...', 'info');
       const res = await fetch('/api/auth/cli-login/start', { method: 'POST' });
       const data = await res.json();
 
       if (data.ok && data.auth_url) {
         cliAuthUrl = data.auth_url;
         setupCliLoginActiveUI(data.auth_url);
+        showToast('لینک ورود گوگل آماده شد. لطفاً مرحله ۱ را باز کنید.', 'success');
       } else if (data.ok && data.state === 'success') {
-        showToast('✓ حساب گوگل متصل شد.');
+        showToast('✓ حساب گوگل متصل شد.', 'success');
         resetCliLoginUI();
         await refreshAccountStatus();
       } else {
@@ -4181,17 +4217,30 @@
   }
 
   function setupCliLoginActiveUI(url) {
+    const idleBox = document.getElementById('cliLoginIdleBox');
     const loadingBox = document.getElementById('cliLoginLoadingBox');
     const activeBox = document.getElementById('cliLoginActiveBox');
     const linkBtn = document.getElementById('btnOpenAuthUrlLink');
     const codeInput = document.getElementById('inputCliAuthCode');
 
+    if (idleBox) idleBox.style.display = 'none';
     if (loadingBox) loadingBox.style.display = 'none';
-    if (activeBox) activeBox.style.display = 'block';
-    if (linkBtn) linkBtn.href = url;
+    if (activeBox) {
+      activeBox.style.display = 'block';
+      try {
+        activeBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch (err) {}
+    }
+    if (linkBtn) {
+      linkBtn.href = url;
+      linkBtn.setAttribute('target', '_blank');
+      linkBtn.setAttribute('rel', 'noopener noreferrer');
+    }
     if (codeInput) {
-      codeInput.value = '';
-      codeInput.focus();
+      if (!codeInput.value) codeInput.value = '';
+      setTimeout(() => {
+        try { codeInput.focus(); } catch (e) {}
+      }, 300);
     }
   }
 
@@ -4207,13 +4256,14 @@
           clearInterval(cliLoginPollTimer);
           cliAuthUrl = data.auth_url;
           setupCliLoginActiveUI(data.auth_url);
-        } else if (data.state === 'error' || attempts > 15) {
+          showToast('لینک ورود گوگل آماده شد.', 'success');
+        } else if (data.state === 'error' || attempts > 18) {
           clearInterval(cliLoginPollTimer);
           showToast(data.error || 'خطا در دریافت لینک لاگین.', 'error');
           resetCliLoginUI();
         }
       } catch (e) {
-        if (attempts > 10) {
+        if (attempts > 12) {
           clearInterval(cliLoginPollTimer);
           resetCliLoginUI();
         }
@@ -4225,7 +4275,7 @@
     if (!cliAuthUrl) return;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(cliAuthUrl).then(() => {
-        showToast('✓ لینک ورود در کلیپ‌بورد کپی شد.');
+        showToast('✓ لینک ورود در کلیپ‌بورد کپی شد.', 'success');
       }).catch(() => fallbackCopyText(cliAuthUrl));
     } else {
       fallbackCopyText(cliAuthUrl);
@@ -4236,10 +4286,22 @@
     const input = document.getElementById('inputCliAuthCode');
     const btn = document.getElementById('btnSubmitAuthCode');
     if (!input) return;
-    const code = input.value.trim();
+    let code = input.value.trim();
     if (!code) {
       showToast('لطفاً کد تایید گوگل را وارد کنید.', 'warn');
       return;
+    }
+
+    // Extract code if user pasted full redirect URL
+    if (code.includes('code=')) {
+      try {
+        const urlParams = new URL(code.startsWith('http') ? code : `https://example.com/?${code}`).searchParams;
+        const extracted = urlParams.get('code');
+        if (extracted) code = extracted;
+      } catch (err) {
+        const m = code.match(/code=([^&]+)/);
+        if (m) code = decodeURIComponent(m[1]);
+      }
     }
 
     if (btn) {
@@ -4257,7 +4319,7 @@
       const data = await res.json();
 
       if (data.ok) {
-        showToast(data.message || '✓ ورود موفقیت‌آمیز بود! حساب شما متصل شد.');
+        showToast(data.message || '✓ ورود موفقیت‌آمیز بود! حساب شما متصل شد.', 'success');
         resetCliLoginUI();
         await refreshAccountStatus(true);
       } else {
@@ -4527,6 +4589,7 @@
   window.copyGoogleAuthUrl = copyGoogleAuthUrl;
   window.submitCliAuthCode = submitCliAuthCode;
   window.cancelCliLoginFlow = cancelCliLoginFlow;
+  window.checkCliLoginSession = checkCliLoginSession;
   window.openQuotaModal = openQuotaModal;
   window.closeQuotaModal = closeQuotaModal;
 
@@ -4930,6 +4993,30 @@
         closeChatSearchModal();
         closeFolderPickerModal();
       }
+    });
+
+    // Enter key submit on CLI auth code input
+    const inputCliCode = document.getElementById('inputCliAuthCode');
+    if (inputCliCode) {
+      inputCliCode.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitCliAuthCode();
+        }
+      });
+    }
+
+    // Tab focus / visibility change sync
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshAccountStatus();
+        checkCliLoginSession();
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      refreshAccountStatus();
+      checkCliLoginSession();
     });
   }
 
