@@ -60,31 +60,74 @@ def find_agy_binary() -> str:
 
 AGY_BIN = find_agy_binary()
 
+def parse_jwt_payload(token_str: str) -> Dict[str, Any]:
+    """Safely parse payload of a JWT token without external crypto dependencies."""
+    if not token_str or not isinstance(token_str, str):
+        return {}
+    try:
+        parts = token_str.split('.')
+        if len(parts) >= 2:
+            payload_b64 = parts[1]
+            payload_b64 += '=' * ((4 - len(payload_b64) % 4) % 4)
+            raw = base64.urlsafe_b64decode(payload_b64.encode('ascii')).decode('utf-8', errors='replace')
+            return json.loads(raw)
+    except Exception:
+        pass
+    return {}
+
+def extract_user_from_token_data(tok: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Extract authenticated user profile from diverse token formats (Go oauth2.Token, JWT, Python auth)."""
+    if not isinstance(tok, dict):
+        return None
+
+    jwt_data = {}
+    id_tok = tok.get('id_token')
+    if id_tok and isinstance(id_tok, str):
+        jwt_data = parse_jwt_payload(id_tok)
+
+    email = tok.get('id_token_email') or tok.get('email') or tok.get('user_email') or jwt_data.get('email')
+    name = tok.get('name') or tok.get('user_name') or tok.get('display_name') or jwt_data.get('name') or jwt_data.get('given_name')
+    if not name and email:
+        name = email.split('@')[0].capitalize()
+
+    has_valid_credential = bool(tok.get('access_token') or tok.get('token') or tok.get('refresh_token') or tok.get('id_token'))
+    if has_valid_credential:
+        return {
+            "name": name or "کاربر گوگل",
+            "email": email or "حساب متصل گوگل",
+            "avatar": (name[:1] if name else (email[:1] if email else "G")).upper(),
+            "authenticated": True,
+            "auth_method": tok.get('auth_method', 'google_oauth')
+        }
+    return None
+
 def get_current_user_profile() -> Dict[str, Any]:
     """Detect currently authenticated Antigravity / Google account dynamically from local system."""
     token_candidates = [
+        # Antigravity CLI native OAuth tokens
+        os.path.expanduser('~/.gemini/antigravity-cli/antigravity-oauth-token'),
+        '/data/data/com.termux/files/home/.gemini/antigravity-cli/antigravity-oauth-token',
+        os.path.expanduser('~/.gemini/antigravity-cli/oauth_token.json'),
+        '/data/data/com.termux/files/home/.gemini/antigravity-cli/oauth_token.json',
+        # Jetski standalone OAuth tokens
         os.path.expanduser('~/.gemini/jetski-standalone-oauth-token'),
         '/data/data/com.termux/files/home/.gemini/jetski-standalone-oauth-token',
         os.path.expanduser('~/.gemini/oauth_token.json'),
         '/data/data/com.termux/files/home/.gemini/oauth_token.json',
+        # Config dir tokens
         os.path.expanduser('~/.config/antigravity/auth.json'),
         '/data/data/com.termux/files/home/.config/antigravity/auth.json',
+        os.path.expanduser('~/.config/antigravity/oauth.json'),
+        '/data/data/com.termux/files/home/.config/antigravity/oauth.json',
     ]
     for path in token_candidates:
         if os.path.isfile(path):
             try:
                 with open(path, 'r', encoding='utf-8') as f:
                     tok = json.load(f)
-                    email = tok.get('id_token_email') or tok.get('email')
-                    name = tok.get('name') or (email.split('@')[0].capitalize() if email else '')
-                    if email and tok.get('token'):
-                        return {
-                            "name": name or "کاربر گوگل",
-                            "email": email,
-                            "avatar": (name[:1] if name else email[:1]).upper(),
-                            "authenticated": True,
-                            "auth_method": tok.get('auth_method', 'google_oauth')
-                        }
+                    user_info = extract_user_from_token_data(tok)
+                    if user_info:
+                        return user_info
             except Exception:
                 pass
 
@@ -2321,15 +2364,27 @@ class AntigravityAccountApiHandler(BaseApiHandler):
                 self.set_status(400)
                 self.finish(json.dumps({"ok": False, "error": "محتوای توکن خالی است."}, ensure_ascii=False))
                 return
-            token_path = os.path.expanduser('~/.gemini/jetski-standalone-oauth-token')
-            os.makedirs(os.path.dirname(token_path), exist_ok=True)
             try:
                 tok_obj = json.loads(raw_token)
-                with open(token_path, 'w', encoding='utf-8') as f:
-                    json.dump(tok_obj, f, indent=2)
             except Exception:
-                with open(token_path, 'w', encoding='utf-8') as f:
-                    json.dump({"token": raw_token, "id_token_email": "user@connected", "auth_method": "manual"}, f)
+                tok_obj = {"token": raw_token, "access_token": raw_token, "id_token_email": "user@connected", "auth_method": "manual"}
+
+            dest_bases = [os.path.expanduser('~'), '/data/data/com.termux/files/home']
+            for base_h in dest_bases:
+                if os.path.isdir(base_h) or base_h == os.path.expanduser('~'):
+                    paths = [
+                        os.path.join(base_h, '.gemini', 'antigravity-cli', 'antigravity-oauth-token'),
+                        os.path.join(base_h, '.gemini', 'jetski-standalone-oauth-token'),
+                        os.path.join(base_h, '.gemini', 'oauth_token.json'),
+                    ]
+                    for p in paths:
+                        try:
+                            os.makedirs(os.path.dirname(p), exist_ok=True)
+                            with open(p, 'w', encoding='utf-8') as f:
+                                json.dump(tok_obj, f, indent=2)
+                        except Exception:
+                            pass
+
             user = get_current_user_profile()
             self.finish(json.dumps({
                 "ok": True,
@@ -2341,14 +2396,20 @@ class AntigravityAccountApiHandler(BaseApiHandler):
 
         elif action == "logout":
             token_paths = [
+                os.path.expanduser('~/.gemini/antigravity-cli/antigravity-oauth-token'),
+                '/data/data/com.termux/files/home/.gemini/antigravity-cli/antigravity-oauth-token',
+                os.path.expanduser('~/.gemini/antigravity-cli/oauth_token.json'),
+                '/data/data/com.termux/files/home/.gemini/antigravity-cli/oauth_token.json',
                 os.path.expanduser('~/.gemini/jetski-standalone-oauth-token'),
-                os.path.expanduser('~/.gemini/oauth_token.json'),
-                os.path.expanduser('~/.gemini/api_key'),
                 '/data/data/com.termux/files/home/.gemini/jetski-standalone-oauth-token',
+                os.path.expanduser('~/.gemini/oauth_token.json'),
                 '/data/data/com.termux/files/home/.gemini/oauth_token.json',
+                os.path.expanduser('~/.gemini/api_key'),
                 '/data/data/com.termux/files/home/.gemini/api_key',
                 os.path.expanduser('~/.config/antigravity/auth.json'),
                 '/data/data/com.termux/files/home/.config/antigravity/auth.json',
+                os.path.expanduser('~/.config/antigravity/oauth.json'),
+                '/data/data/com.termux/files/home/.config/antigravity/oauth.json',
             ]
             for p in token_paths:
                 if os.path.exists(p):
@@ -2589,68 +2650,124 @@ class CliLoginManager:
                 return {"ok": True, "state": "success", "user": user}
             return {"ok": False, "error": "نشست لاگین فعال نیست یا زمان آن به پایان رسیده است. لطفاً مجدداً دکمه ورود را بزنید."}
 
-        clean_code = raw_code.strip()
+        clean_code = raw_code.strip().strip("'\"")
         if "code=" in clean_code:
-            m = re.search(r'code=([^&]+)', clean_code)
+            m = re.search(r'code=([^&\s"\']+)', clean_code)
             if m:
                 from urllib.parse import unquote
                 clean_code = unquote(m.group(1))
+        clean_code = clean_code.strip()
 
         if not clean_code:
             return {"ok": False, "error": "کد احراز هویت خالی است."}
 
         self.state = "submitting"
         try:
-            # Write verification code + newline to the PTY
+            logger.info(f"[CliLogin] Submitting verification code (len={len(clean_code)}) to PTY...")
             os.write(self.master_fd, (clean_code + "\r\n").encode('utf-8'))
 
-            tmp_token_path = os.path.join(self._tmp_auth_dir, '.gemini', 'jetski-standalone-oauth-token') if self._tmp_auth_dir else ""
-            target_token_path = os.path.expanduser('~/.gemini/jetski-standalone-oauth-token')
-            termux_token_path = '/data/data/com.termux/files/home/.gemini/jetski-standalone-oauth-token'
+            termux_home = '/data/data/com.termux/files/home'
+            user_home = os.path.expanduser('~')
+            dest_dirs = [user_home]
+            if os.path.isdir(termux_home):
+                dest_dirs.append(termux_home)
 
-            for _ in range(30):
+            for _ in range(50):
                 await asyncio.sleep(0.5)
-                if tmp_token_path and os.path.exists(tmp_token_path):
-                    os.makedirs(os.path.dirname(target_token_path), exist_ok=True)
-                    shutil.copy2(tmp_token_path, target_token_path)
-                    if os.path.isdir('/data/data/com.termux/files/home'):
+
+                # 1. Search inside temporary directory for any valid token
+                found_tokens = []
+                if self._tmp_auth_dir and os.path.exists(self._tmp_auth_dir):
+                    for root, dirs, files in os.walk(self._tmp_auth_dir):
+                        for fn in files:
+                            if "token" in fn.lower() or "oauth" in fn.lower() or fn.endswith(".json"):
+                                full_p = os.path.join(root, fn)
+                                try:
+                                    with open(full_p, 'r', encoding='utf-8') as f:
+                                        d = json.load(f)
+                                        if extract_user_from_token_data(d):
+                                            rel = os.path.relpath(full_p, self._tmp_auth_dir)
+                                            found_tokens.append((full_p, rel, d))
+                                except Exception:
+                                    pass
+
+                # 2. Copy discovered tokens to all target home directories
+                if found_tokens:
+                    for src_p, rel_p, tok_data in found_tokens:
+                        for base_h in dest_dirs:
+                            target_p = os.path.join(base_h, rel_p)
+                            try:
+                                os.makedirs(os.path.dirname(target_p), exist_ok=True)
+                                shutil.copy2(src_p, target_p)
+                            except Exception:
+                                pass
+
+                            # Also guarantee standard token locations
+                            std_targets = [
+                                os.path.join(base_h, '.gemini', 'antigravity-cli', 'antigravity-oauth-token'),
+                                os.path.join(base_h, '.gemini', 'jetski-standalone-oauth-token'),
+                                os.path.join(base_h, '.gemini', 'oauth_token.json'),
+                            ]
+                            for st in std_targets:
+                                try:
+                                    os.makedirs(os.path.dirname(st), exist_ok=True)
+                                    shutil.copy2(src_p, st)
+                                except Exception:
+                                    pass
+
+                    user = get_current_user_profile()
+                    if user.get("authenticated"):
+                        self.state = "success"
+                        for client in list(connected_clients):
+                            try:
+                                client.write_message(json.dumps({
+                                    "type": "account_updated",
+                                    "user": user,
+                                    "logged_in": True
+                                }, ensure_ascii=False))
+                            except Exception:
+                                pass
+                        self.reset()
+                        return {
+                            "ok": True,
+                            "state": "success",
+                            "message": "✓ ورود به حساب گوگل با موفقیت انجام شد!",
+                            "user": user
+                        }
+
+                # 3. Check if system profile is authenticated already
+                user = get_current_user_profile()
+                if user.get("authenticated"):
+                    self.state = "success"
+                    for client in list(connected_clients):
                         try:
-                            os.makedirs(os.path.dirname(termux_token_path), exist_ok=True)
-                            shutil.copy2(tmp_token_path, termux_token_path)
+                            client.write_message(json.dumps({
+                                "type": "account_updated",
+                                "user": user,
+                                "logged_in": True
+                            }, ensure_ascii=False))
                         except Exception:
                             pass
+                    self.reset()
+                    return {
+                        "ok": True,
+                        "state": "success",
+                        "message": "✓ ورود به حساب گوگل با موفقیت انجام شد!",
+                        "user": user
+                    }
 
-                    user = get_current_user_profile()
-                    if user.get("authenticated"):
-                        self.state = "success"
-                        self.reset()
-                        return {
-                            "ok": True,
-                            "state": "success",
-                            "message": "✓ ورود به حساب گوگل با موفقیت انجام شد!",
-                            "user": user
-                        }
-
-                if os.path.exists(target_token_path):
-                    user = get_current_user_profile()
-                    if user.get("authenticated"):
-                        self.state = "success"
-                        self.reset()
-                        return {
-                            "ok": True,
-                            "state": "success",
-                            "message": "✓ ورود به حساب گوگل با موفقیت انجام شد!",
-                            "user": user
-                        }
-
-            user = get_current_user_profile()
-            if user.get("authenticated"):
-                self.state = "success"
-                self.reset()
-                return {"ok": True, "state": "success", "user": user}
+                # 4. Check if error is printed to PTY logs
+                pty_output = "".join(self.logs)
+                if "invalid_grant" in pty_output or ("error:" in pty_output.lower() and "oauth" in pty_output.lower()):
+                    err_msg = "کد تایید نامعتبر است یا منقضی شده است."
+                    m_err = re.search(r'(error[^:\n]*:\s*[^\r\n]+)', pty_output, re.IGNORECASE)
+                    if m_err:
+                        err_msg = m_err.group(1).strip()
+                    self.state = "error"
+                    return {"ok": False, "error": err_msg}
 
             self.state = "error"
-            return {"ok": False, "error": "کد تایید گوگل توسط سرور پذیرفته نشد یا منقضی شده است. لطفاً مجدداً امتحان کنید."}
+            return {"ok": False, "error": "کد تایید گوگل توسط سرور پذیرفته نشد یا زمان ورود به پایان رسید. لطفاً مجدداً امتحان کنید."}
         except Exception as e:
             self.state = "error"
             return {"ok": False, "error": f"خطا در ارسال کد تایید: {e}"}
