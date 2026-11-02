@@ -1117,6 +1117,8 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
 
     try:
         sub_env = os.environ.copy()
+        if os.path.isdir('/data/data/com.termux/files/home'):
+            sub_env['HOME'] = '/data/data/com.termux/files/home'
         api_key = sub_env.get('GEMINI_API_KEY')
         if not api_key:
             for ak_path in [os.path.expanduser('~/.gemini/api_key'), '/data/data/com.termux/files/home/.gemini/api_key']:
