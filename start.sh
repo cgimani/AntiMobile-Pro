@@ -33,6 +33,11 @@ if command -v lsof >/dev/null 2>&1; then
 fi
 sleep 0.5
 
+# 2.5 Ensure auth_config.json has auth disabled for zero-friction mobile
+if [ -f "$DIR/auth_config.json" ]; then
+    python3 -c "import json; f='$DIR/auth_config.json'; d=json.load(open(f)); d['enabled']=False; json.dump(d,open(f,'w'),indent=2)" 2>/dev/null || true
+fi
+
 # 3. Start Tornado Server in background
 nohup python3 "$DIR/server.py" > "$DIR/server.log" 2>&1 &
 SERVER_PID=$!

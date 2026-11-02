@@ -17,6 +17,12 @@ import subprocess
 import shutil
 import hashlib
 import secrets
+import threading
+import select
+import pty
+import fcntl
+import termios
+import struct
 from collections import deque
 from typing import Set, Dict, Any, Optional, List, Tuple
 
@@ -224,6 +230,10 @@ class AuthManager:
             except Exception as e:
                 print(f"[WARN] Error reading auth config: {e}")
 
+        # Always force auth disabled unless ANTI_REQUIRE_PASSWORD=1 is explicitly set
+        if os.environ.get("ANTI_REQUIRE_PASSWORD") != "1":
+            self.config["enabled"] = False
+
         # Initialize default admin credentials if not set
         if not self.config.get("password_hash"):
             salt = secrets.token_hex(16)
@@ -284,7 +294,7 @@ class AuthManager:
         return False
 
     def validate_token(self, token: Optional[str]) -> Tuple[bool, Optional[str]]:
-        if not self.config.get("enabled", False):
+        if os.environ.get("ANTI_REQUIRE_PASSWORD") != "1" or not self.config.get("enabled", False):
             return True, "admin"
         if not token:
             return False, None
@@ -1675,6 +1685,8 @@ class BaseApiHandler(tornado.web.RequestHandler):
     def prepare(self):
         if self.request.method == "OPTIONS":
             return
+        if os.environ.get("ANTI_REQUIRE_PASSWORD") != "1" and not auth_manager.config.get("enabled", False):
+            return
         is_auth, user = self.is_authenticated()
         if not is_auth:
             self.set_status(401)
@@ -2395,23 +2407,62 @@ class AntigravityAccountApiHandler(BaseApiHandler):
         self.get()
 
 class CliLoginManager:
-    """Manages headless background Google OAuth CLI process and user token exchange."""
+    """Manages pseudo-terminal background Google OAuth CLI process and user token exchange."""
     def __init__(self):
-        self.process: Optional[asyncio.subprocess.Process] = None
+        self.master_fd: Optional[int] = None
+        self.slave_fd: Optional[int] = None
+        self.pid: Optional[int] = None
         self.auth_url: Optional[str] = None
         self.state: str = "idle"  # idle, starting, waiting_code, submitting, success, error
         self.error_message: Optional[str] = None
         self.logs: List[str] = []
-        self._reader_task: Optional[asyncio.Task] = None
-        self._timeout_task: Optional[asyncio.Task] = None
+        self._reader_thread: Optional[threading.Thread] = None
         self._tmp_auth_dir: Optional[str] = None
+        self._running: bool = False
 
-    async def start_login(self) -> Dict[str, Any]:
-        await self.cancel()
+    def reset(self):
+        self._running = False
+        if self.pid:
+            try:
+                os.kill(self.pid, signal.SIGKILL)
+            except Exception:
+                pass
+            try:
+                os.waitpid(self.pid, os.WNOHANG)
+            except Exception:
+                pass
+        self.pid = None
 
-        self.state = "starting"
+        if self.master_fd is not None:
+            try:
+                os.close(self.master_fd)
+            except Exception:
+                pass
+            self.master_fd = None
+
+        if self.slave_fd is not None:
+            try:
+                os.close(self.slave_fd)
+            except Exception:
+                pass
+            self.slave_fd = None
+
+        if self._tmp_auth_dir and os.path.exists(self._tmp_auth_dir):
+            try:
+                shutil.rmtree(self._tmp_auth_dir, ignore_errors=True)
+            except Exception:
+                pass
+        self._tmp_auth_dir = None
+        self.state = "idle"
         self.auth_url = None
         self.error_message = None
+
+    async def cancel(self, restore_backup=True):
+        self.reset()
+
+    async def start_login(self) -> Dict[str, Any]:
+        self.reset()
+        self.state = "starting"
         self.logs = []
 
         agy_bin = find_agy_binary()
@@ -2422,8 +2473,14 @@ class CliLoginManager:
 
         try:
             import tempfile
-            self._tmp_auth_dir = tempfile.mkdtemp(prefix='antimobile_oauth_')
+            self.master_fd, self.slave_fd = pty.openpty()
+            # Set virtual terminal very wide so URLs never line-wrap
+            try:
+                fcntl.ioctl(self.slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 2000, 0, 0))
+            except Exception:
+                pass
 
+            self._tmp_auth_dir = tempfile.mkdtemp(prefix='antimobile_oauth_')
             sub_env = os.environ.copy()
             sub_env['HOME'] = self._tmp_auth_dir
             sub_env['XDG_CONFIG_HOME'] = os.path.join(self._tmp_auth_dir, '.config')
@@ -2431,61 +2488,66 @@ class CliLoginManager:
             sub_env.pop('GOOGLE_API_KEY', None)
             sub_env.pop('GOOGLE_APPLICATION_CREDENTIALS', None)
 
-            self.process = await asyncio.create_subprocess_exec(
-                agy_bin, "-p", "login",
-                env=sub_env,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-
-            url_future = asyncio.get_event_loop().create_future()
-            buffer = ""
-
-            async def read_stream(stream):
-                nonlocal buffer
+            self.pid = os.fork()
+            if self.pid == 0:
                 try:
-                    while True:
-                        chunk = await stream.read(512)
+                    os.close(self.master_fd)
+                    os.dup2(self.slave_fd, 0)
+                    os.dup2(self.slave_fd, 1)
+                    os.dup2(self.slave_fd, 2)
+                    os.close(self.slave_fd)
+                    # Pass agy without arguments so it enters interactive OAuth mode
+                    os.execve(agy_bin, [agy_bin], sub_env)
+                except Exception:
+                    os._exit(1)
+
+            os.close(self.slave_fd)
+            self.slave_fd = None
+            self._running = True
+
+            loop = asyncio.get_event_loop()
+            url_future = loop.create_future()
+
+            def pty_reader_worker():
+                buf = ""
+                has_sent_enter = False
+                while self._running and self.master_fd is not None:
+                    try:
+                        r, _, _ = select.select([self.master_fd], [], [], 0.2)
+                        if not r:
+                            continue
+                        chunk = os.read(self.master_fd, 1024)
                         if not chunk:
                             break
                         text = chunk.decode('utf-8', errors='replace')
-                        buffer += text
+                        buf += text
                         self.logs.append(text)
 
+                        # If agy shows the login method selection menu, send Enter to choose option 1 (Google OAuth)
+                        if not has_sent_enter and "Select login method" in buf:
+                            has_sent_enter = True
+                            try:
+                                os.write(self.master_fd, b"\r\n")
+                            except Exception:
+                                pass
+                            buf = ""
+
+                        # Search for Google OAuth URL
                         if not self.auth_url:
-                            m = re.search(r'(https://accounts\.google\.com/o/oauth2/auth[^\s]+)', buffer)
+                            m = re.search(r'(https://accounts\.google\.com/o/oauth2/auth[^\s\r\n]+)', buf)
                             if m:
                                 self.auth_url = m.group(1)
                                 self.state = "waiting_code"
                                 if not url_future.done():
-                                    url_future.set_result(self.auth_url)
+                                    loop.call_soon_threadsafe(url_future.set_result, self.auth_url)
+                    except Exception:
+                        break
 
-                        if "error" in text.lower() or "failed" in text.lower():
-                            if not self.auth_url:
-                                self.error_message = text.strip()
-                except Exception:
-                    pass
-
-            async def read_both():
-                await asyncio.gather(
-                    read_stream(self.process.stdout),
-                    read_stream(self.process.stderr)
-                )
-
-            self._reader_task = asyncio.create_task(read_both())
-
-            async def auto_timeout():
-                await asyncio.sleep(180)
-                if self.state in ("starting", "waiting_code"):
-                    self.state = "error"
-                    self.error_message = "زمان نشست لاگین به پایان رسید."
-                    await self.cancel()
-
-            self._timeout_task = asyncio.create_task(auto_timeout())
+            self._reader_thread = threading.Thread(target=pty_reader_worker, daemon=True)
+            self._reader_thread.start()
 
             try:
-                auth_url = await asyncio.wait_for(url_future, timeout=10.0)
+                auth_url = await asyncio.wait_for(url_future, timeout=12.0)
                 return {
                     "ok": True,
                     "state": self.state,
@@ -2502,7 +2564,7 @@ class CliLoginManager:
             return {"ok": False, "error": self.error_message}
 
     async def submit_code(self, raw_code: str) -> Dict[str, Any]:
-        if not self.process or self.process.returncode is not None:
+        if not self._running or self.master_fd is None:
             user = get_current_user_profile()
             if user.get("authenticated"):
                 self.state = "success"
@@ -2521,17 +2583,16 @@ class CliLoginManager:
 
         self.state = "submitting"
         try:
-            self.process.stdin.write(f"{clean_code}\n".encode('utf-8'))
-            await self.process.stdin.drain()
+            # Write verification code + newline to the PTY
+            os.write(self.master_fd, (clean_code + "\r\n").encode('utf-8'))
 
             tmp_token_path = os.path.join(self._tmp_auth_dir, '.gemini', 'jetski-standalone-oauth-token') if self._tmp_auth_dir else ""
             target_token_path = os.path.expanduser('~/.gemini/jetski-standalone-oauth-token')
             termux_token_path = '/data/data/com.termux/files/home/.gemini/jetski-standalone-oauth-token'
 
-            for _ in range(24):
+            for _ in range(30):
                 await asyncio.sleep(0.5)
                 if tmp_token_path and os.path.exists(tmp_token_path):
-                    import shutil
                     os.makedirs(os.path.dirname(target_token_path), exist_ok=True)
                     shutil.copy2(tmp_token_path, target_token_path)
                     if os.path.isdir('/data/data/com.termux/files/home'):
@@ -2544,7 +2605,7 @@ class CliLoginManager:
                     user = get_current_user_profile()
                     if user.get("authenticated"):
                         self.state = "success"
-                        await self.cancel()
+                        self.reset()
                         return {
                             "ok": True,
                             "state": "success",
@@ -2556,7 +2617,7 @@ class CliLoginManager:
                     user = get_current_user_profile()
                     if user.get("authenticated"):
                         self.state = "success"
-                        await self.cancel()
+                        self.reset()
                         return {
                             "ok": True,
                             "state": "success",
@@ -2567,6 +2628,7 @@ class CliLoginManager:
             user = get_current_user_profile()
             if user.get("authenticated"):
                 self.state = "success"
+                self.reset()
                 return {"ok": True, "state": "success", "user": user}
 
             self.state = "error"
@@ -2574,28 +2636,6 @@ class CliLoginManager:
         except Exception as e:
             self.state = "error"
             return {"ok": False, "error": f"خطا در ارسال کد تایید: {e}"}
-
-    def reset(self):
-        if self._timeout_task and not self._timeout_task.done():
-            self._timeout_task.cancel()
-        if self.process and self.process.returncode is None:
-            try:
-                self.process.terminate()
-            except Exception:
-                pass
-        if self._tmp_auth_dir and os.path.exists(self._tmp_auth_dir):
-            try:
-                import shutil
-                shutil.rmtree(self._tmp_auth_dir, ignore_errors=True)
-            except Exception:
-                pass
-        self._tmp_auth_dir = None
-        self.state = "idle"
-        self.auth_url = None
-        self.error_message = None
-
-    async def cancel(self, restore_backup=True):
-        self.reset()
 
     def get_status(self) -> Dict[str, Any]:
         user = get_current_user_profile()

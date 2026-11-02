@@ -401,12 +401,8 @@
     }
     const res = await fetch(url, options);
     if (res.status === 401) {
-      isAuthenticated = false;
-      showLoginModal('احراز هویت الزامی است یا نشست شما منقضی شده است.');
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        try { ws.close(4401); } catch (e) {}
-      }
-      throw new Error('Unauthorized');
+      console.warn('[Auth] 401 Unauthorized for', url);
+      return res;
     }
     return res;
   }
