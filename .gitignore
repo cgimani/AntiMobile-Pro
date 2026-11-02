@@ -14,6 +14,7 @@ chat_history.json
 auth_config.json
 .env
 .system_generated/
+scratch/
 
 # OS Specific
 .DS_Store
