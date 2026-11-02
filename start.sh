@@ -38,6 +38,20 @@ if [ -f "$DIR/auth_config.json" ]; then
     python3 -c "import json; f='$DIR/auth_config.json'; d=json.load(open(f)); d['enabled']=False; json.dump(d,open(f,'w'),indent=2)" 2>/dev/null || true
 fi
 
+# 2.8 Ensure vendor/ is in PYTHONPATH for foolproof zero-failure dependencies
+if [ -d "$DIR/vendor" ]; then
+    export PYTHONPATH="$DIR/vendor:$PYTHONPATH"
+fi
+
+# 2.9 Self-healing check: ensure Tornado is accessible
+if ! python3 -c "import tornado" >/dev/null 2>&1; then
+    echo -e "${YELLOW}⚠️ Tornado not detected. Attempting automatic self-healing...${NC}"
+    export TORNADO_EXTENSION=0
+    export TORNADO_NO_EXTENSION=1
+    python3 -m pip install "tornado>=6.2,<7.0" --no-build-isolation --break-system-packages 2>/dev/null || \
+    python3 -m pip install "tornado>=6.2,<7.0" --break-system-packages 2>/dev/null || true
+fi
+
 # 3. Start Tornado Server in background
 nohup python3 "$DIR/server.py" > "$DIR/server.log" 2>&1 &
 SERVER_PID=$!

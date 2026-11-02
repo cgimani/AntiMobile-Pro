@@ -26,6 +26,12 @@ import struct
 from collections import deque
 from typing import Set, Dict, Any, Optional, List, Tuple
 
+# Fallback to embedded pure-Python vendor directory if system tornado is missing
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_VENDOR_DIR = os.path.join(_SCRIPT_DIR, "vendor")
+if os.path.isdir(_VENDOR_DIR) and _VENDOR_DIR not in sys.path:
+    sys.path.insert(0, _VENDOR_DIR)
+
 import tornado.web
 import tornado.websocket
 import tornado.ioloop

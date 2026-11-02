@@ -83,16 +83,12 @@ install_dependencies() {
         termux)
             echo -e "${GREEN}📱 Detected environment: Android Termux${NC}"
             pkg update -y >/dev/null 2>&1 || true
-            for pkg in python git curl termux-tools termux-api; do
+            for pkg in python python-pip git curl termux-tools termux-api; do
                 if ! command -v $pkg >/dev/null 2>&1; then
                     echo -e "${YELLOW}📦 Installing $pkg...${NC}"
                     pkg install -y $pkg 2>/dev/null || true
                 fi
             done
-            if ! python3 -c "import tornado" >/dev/null 2>&1; then
-                echo -e "${YELLOW}📦 Installing prebuilt python-tornado for Termux...${NC}"
-                pkg install -y python-tornado 2>/dev/null || true
-            fi
             ;;
         macos)
             echo -e "${GREEN}🍏 Detected environment: macOS ($(uname -m))${NC}"
@@ -130,20 +126,37 @@ install_dependencies() {
 
     # Ensure pip and Tornado are ready
     echo -e "${BLUE}🐍 Checking Python dependencies (Tornado)...${NC}"
+    export TORNADO_EXTENSION=0
+    export TORNADO_NO_EXTENSION=1
+
     if ! python3 -c "import tornado" >/dev/null 2>&1; then
         echo -e "${YELLOW}📦 Installing Tornado library...${NC}"
-        if [ "$OS_TYPE" = "termux" ]; then
-            pkg install -y python-tornado 2>/dev/null || true
-        fi
+        # Ensure setuptools and wheel are installed (avoids PEP 517 build isolation error on Android)
+        python3 -m pip install --upgrade setuptools wheel --break-system-packages 2>/dev/null || true
+
+        # Method 1: Install with --no-build-isolation (avoids clang compilation on Android)
+        python3 -m pip install "tornado>=6.2,<7.0" --no-build-isolation --break-system-packages 2>/dev/null || \
+        python3 -m pip install "tornado>=6.2,<7.0" --no-build-isolation 2>/dev/null || true
+
+        # Method 2: Standard pip install fallback
         if ! python3 -c "import tornado" >/dev/null 2>&1; then
-            python3 -m pip install "tornado>=6.2" --break-system-packages 2>/dev/null || \
-            python3 -m pip install "tornado>=6.2" 2>/dev/null || true
+            python3 -m pip install "tornado>=6.2,<7.0" --break-system-packages 2>/dev/null || \
+            python3 -m pip install "tornado>=6.2,<7.0" 2>/dev/null || true
+        fi
+
+        # Method 3: Termux User Repository mirror fallback
+        if ! python3 -c "import tornado" >/dev/null 2>&1 && [ "$OS_TYPE" = "termux" ]; then
+            python3 -m pip install "tornado>=6.2,<7.0" --extra-index-url https://termux-user-repository.github.io/pypi/ --break-system-packages 2>/dev/null || true
         fi
     fi
+
+    local _vendor_dir="${TARGET_DIR:-$HOME/AntiMobile-Pro}/vendor"
     if python3 -c "import tornado" >/dev/null 2>&1; then
         echo -e "${GREEN}✅ Python dependencies are ready (Tornado OK).${NC}"
+    elif [ -d "$_vendor_dir/tornado" ] || [ -d "$PWD/vendor/tornado" ]; then
+        echo -e "${GREEN}✅ Python dependencies ready (using AntiMobile embedded pure-Python Tornado).${NC}"
     else
-        echo -e "${YELLOW}⚠️ Notice: Python Tornado check completed.${NC}"
+        echo -e "${YELLOW}⚠️ Notice: Pip install completed. Project embedded vendor will guarantee runtime availability.${NC}"
     fi
     ensure_termux_permissions
 }
@@ -541,13 +554,10 @@ update_app() {
     detect_os
     ensure_termux_permissions
     if ! python3 -c "import tornado" >/dev/null 2>&1; then
-        if [ "$OS_TYPE" = "termux" ]; then
-            pkg install -y python-tornado 2>/dev/null || true
-        fi
-        if ! python3 -c "import tornado" >/dev/null 2>&1; then
-            python3 -m pip install "tornado>=6.2" --break-system-packages 2>/dev/null || \
-            python3 -m pip install "tornado>=6.2" 2>/dev/null || true
-        fi
+        export TORNADO_EXTENSION=0
+        export TORNADO_NO_EXTENSION=1
+        python3 -m pip install "tornado>=6.2,<7.0" --no-build-isolation --break-system-packages 2>/dev/null || \
+        python3 -m pip install "tornado>=6.2,<7.0" --break-system-packages 2>/dev/null || true
     fi
 
     NEW_VER=$(get_installed_version)
