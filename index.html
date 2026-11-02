@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -18,17 +18,17 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/css/highlight.css?v=3.4">
-  <link rel="stylesheet" href="/css/app.css?v=3.4">
+  <link rel="stylesheet" href="/css/highlight.css?v=3.5">
+  <link rel="stylesheet" href="/css/app.css?v=3.5">
 </head>
 <body>
   <div class="app-container">
 
     <!-- Header: Fixed 48px, 1-Line, Mobile Responsive -->
     <header class="header">
-      <!-- Right Side: Hamburger Menu Button -->
-      <div class="header-right">
-        <button id="btnMenu" class="icon-btn" title="منوی گفتگوها و ابزارها" aria-label="Menu">
+      <!-- Left Side: Hamburger Menu Button -->
+      <div class="header-left">
+        <button id="btnMenu" class="icon-btn" onclick="openDrawer()" title="Sidebar & Projects" aria-label="Menu">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <line x1="3" y1="6" x2="21" y2="6"></line>
             <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -37,27 +37,19 @@
         </button>
       </div>
 
-      <!-- Center: Title + Active Project & Model -->
-      <div class="header-center" id="headerCenterBtn" title="مدیریت و انتخاب پروژه">
-        <span class="header-title">AntiMobile Pro</span>
-        <div class="header-sub-row">
-          <span class="header-project-badge" id="headerProjectText">📁 پروژه اصلی</span>
-          <span class="header-sub-sep">•</span>
-          <span class="header-model" id="headerModelText">gemini-3.8-flash-high</span>
-        </div>
-      </div>
 
-      <!-- Left Side: Files + Processes + Status Dot + New Chat -->
-      <div class="header-left">
+
+      <!-- Right Side: Files + Processes + Status Dot + New Chat -->
+      <div class="header-right">
         <!-- Open Files Explorer Button -->
-        <button id="btnOpenFiles" class="icon-btn" title="فایل‌های پروژه" aria-label="Files">
+        <button id="btnOpenFiles" class="icon-btn" title="Files" aria-label="Files">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
           </svg>
         </button>
 
         <!-- Background Processes Button with Badge -->
-        <button id="btnOpenProcesses" class="icon-btn btn-with-badge" title="پروسه‌های پس‌زمینه" aria-label="Processes">
+        <button id="btnOpenProcesses" class="icon-btn btn-with-badge" title="Background Processes" aria-label="Processes">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -66,10 +58,10 @@
         </button>
 
         <!-- 3-State Connection Status Dot -->
-        <span class="status-dot disconnected" id="headerStatusDot" title="وضعیت اتصال: قرمز (قطع)"></span>
+        <span class="status-dot disconnected" id="headerStatusDot" title="Connection Status"></span>
 
         <!-- New Chat Button -->
-        <button id="btnNewChat" class="icon-btn" title="گفتگوی جدید" aria-label="New Chat">
+        <button id="btnNewChat" class="icon-btn" onclick="createNewChat()" title="New Conversation" aria-label="New Chat">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -121,264 +113,178 @@
 
     <!-- Main Chat Scrollable Area -->
     <main class="chat-scroll-area" id="chatScrollArea">
-      <div class="chat-inner" id="chatInner">
-        
-        <!-- Empty State / Welcome Screen -->
-        <div class="empty-state" id="emptyState">
-          <svg class="empty-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <polygon points="12 2 2 22 22 22"></polygon>
-            <circle cx="12" cy="15" r="2"></circle>
-          </svg>
-          <div class="empty-title">به Antigravity خوش آمدید</div>
-          <div class="empty-desc">دستیار هوشمند و ایجنت خودکار متصل به باینری اصلی سیستم. برای شروع پیامی بنویسید یا یکی از موارد زیر را انتخاب کنید:</div>
-          <div class="suggestion-chips">
-            <button class="chip-btn" data-prompt="فایل‌های این پوشه رو بررسی کن و توضیح بده">📂 بررسی ساختار پروژه</button>
-            <button class="chip-btn" data-prompt="وضعیت گیت و تغییرات اخیر رو گزارش بده">🔍 وضعیت گیت و تغییرات</button>
-            <button class="chip-btn" data-prompt="/help">⚡ مشاهده لیست دستورات</button>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Thinking Indicator -->
-      <div class="thinking-row" id="thinkingRow">
-        <div class="thinking-dots">
-          <span class="thinking-dot"></span>
-          <span class="thinking-dot"></span>
-          <span class="thinking-dot"></span>
-        </div>
-        <span id="thinkingText">Thinking...</span>
-      </div>
+      <div class="chat-inner" id="chatInner"></div>
     </main>
 
-    <!-- Input Bar (Fixed Bottom) -->
-    <footer class="input-area-wrap">
-      <div class="input-container">
-        
+    <!-- Antigravity 2.0 Modern Floating Dock (Fixed Bottom) -->
+    <footer class="input-area-wrap agy-dock-wrap">
+      <div class="input-container agy-dock-container">
+
         <!-- Slash Commands Autocomplete Popover -->
         <div class="slash-popover" id="slashPopover"></div>
 
         <!-- @ Mentions Workspace Files Popover -->
         <div class="mentions-popover" id="mentionsPopover"></div>
 
-        <!-- Optional Extra Keys Row (Hidden by default) -->
-        <div class="extra-keys-row" id="extraKeysRow">
-          <button class="key-btn" data-key="ESC">ESC</button>
-          <button class="key-btn" data-key="TAB">TAB</button>
-          <button class="key-btn" data-key="CTRL">CTRL</button>
-          <button class="key-btn" data-key="ALT">ALT</button>
-          <button class="key-btn" data-key="/goal">/goal</button>
-          <button class="key-btn" data-key="/plan">/plan</button>
-          <button class="key-btn" data-key="/model">/model</button>
-          <button class="key-btn" data-key="/compact">/compact</button>
-          <button class="key-btn" data-key="CLEAR">CLEAR</button>
-        </div>
-
-        <div class="input-box">
-          <!-- Small Keyboard Toggle Icon -->
-          <button id="btnToggleKeys" class="icon-btn" style="width: 28px; height: 28px;" title="کلیدهای کمکی" aria-label="Toggle Keys">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <rect x="2" y="4" width="20" height="16" rx="2"></rect>
-              <line x1="6" y1="8" x2="6.01" y2="8"></line>
-              <line x1="10" y1="8" x2="10.01" y2="8"></line>
-              <line x1="14" y1="8" x2="14.01" y2="8"></line>
-              <line x1="18" y1="8" x2="18.01" y2="8"></line>
-              <line x1="6" y1="12" x2="6.01" y2="12"></line>
-              <line x1="18" y1="12" x2="18.01" y2="12"></line>
-              <line x1="9" y1="16" x2="15" y2="16"></line>
-            </svg>
-          </button>
-
-          <!-- Attach File / Image Button -->
-          <button id="btnAttachFile" class="icon-btn" style="width: 28px; height: 28px;" title="پیوست فایل یا تصویر" aria-label="Attach File">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-            </svg>
-          </button>
-          <input type="file" id="fileAttachmentInput" style="display: none;" multiple>
-
+        <!-- Main Dock Card (Antigravity 2.0 Input Canvas) -->
+        <div class="agy-dock-card">
           <!-- Text Input Area -->
           <textarea 
             id="inputMessage" 
-            class="input-textarea" 
-            placeholder="پیامی بنویسید یا ‎/‎ برای دستورات، ‎@‎ برای فایل‌ها..." 
+            class="input-textarea agy-dock-textarea" 
+            placeholder="Ask anything, @ to mention, / for actions" 
             rows="1"
             dir="auto"
           ></textarea>
 
-          <!-- Voice Input Mic Button -->
-          <button id="btnMic" class="icon-btn" style="width: 32px; height: 32px;" title="تایپ صوتی (میکروفون)" aria-label="Voice Input">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-              <line x1="12" y1="19" x2="12" y2="23"></line>
-              <line x1="8" y1="23" x2="16" y2="23"></line>
-            </svg>
-          </button>
+          <!-- Inside-Card Controls Row -->
+          <div class="agy-dock-controls-row">
+            <div class="agy-dock-left-controls">
+              <!-- Model Picker Dropdown Wrapper -->
+              <div class="agy-dropdown-wrapper" id="dockModelWrapper">
+                <button id="btnDockModel" class="agy-pill-btn" onclick="toggleModelDropdown(event)" title="انتخاب مدل هوش مصنوعی">
+                  <span id="dockModelName">Gemini 3.8 Flash (Medium)</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="agy-dropdown-menu agy-model-dropdown" id="dockModelDropdown">
+                  <div class="agy-dropdown-header">Model Selection</div>
+                  <div class="agy-dropdown-items" id="dockModelDropdownList">
+                    <!-- Populated dynamically from /api/models -->
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          <!-- Send / Stop Button -->
-          <button id="btnSend" class="input-btn btn-disabled" title="ارسال پیام" aria-label="Send">
-            <svg id="btnSendIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="19" x2="12" y2="5"></line>
-              <polyline points="5 12 12 5 19 12"></polyline>
-            </svg>
-          </button>
+            <div class="agy-dock-right-controls">
+              <!-- Policy / Preset Dropdown Wrapper -->
+              <div class="agy-dropdown-wrapper" id="dockPolicyWrapper">
+                <button id="btnDockPolicy" class="agy-pill-btn" onclick="togglePolicyDropdown(event)" title="سطح دسترسی و اجرای اسکریپت‌ها">
+                  <span>🛡️</span>
+                  <span id="dockPolicyName">Auto</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="agy-dropdown-menu agy-policy-dropdown" id="dockPolicyDropdown">
+                  <div class="agy-dropdown-header">Permission Preset</div>
+                  <div class="agy-dropdown-items" id="dockPolicyDropdownList">
+                    <div class="agy-dropdown-item" data-preset="Auto" onclick="selectPolicyPreset('Auto')">
+                      <div class="agy-dropdown-item-info">
+                        <span class="agy-dropdown-item-title">Auto (Default)</span>
+                        <span class="agy-dropdown-item-desc">اجرای ابزارهای عادی و تایید برای دستورات حساس شل</span>
+                      </div>
+                      <span class="agy-dropdown-check">✓</span>
+                    </div>
+                    <div class="agy-dropdown-item" data-preset="Turbo" onclick="selectPolicyPreset('Turbo')">
+                      <div class="agy-dropdown-item-info">
+                        <span class="agy-dropdown-item-title">Turbo (Autonomous)</span>
+                        <span class="agy-dropdown-item-desc">اجرای خودکار و بدون تایید همه دستورات و اسکریپت‌ها</span>
+                      </div>
+                      <span class="agy-dropdown-check">✓</span>
+                    </div>
+                    <div class="agy-dropdown-item" data-preset="Always Ask" onclick="selectPolicyPreset('Always Ask')">
+                      <div class="agy-dropdown-item-info">
+                        <span class="agy-dropdown-item-title">Always Ask</span>
+                        <span class="agy-dropdown-item-desc">تایید پیش از اجرای هرگونه اسکریپت یا ادیت فایل</span>
+                      </div>
+                      <span class="agy-dropdown-check">✓</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Send / Stop Button -->
+              <button id="btnSend" class="agy-circle-send-btn btn-disabled" onclick="sendMessage()" title="ارسال پیام" aria-label="Send">
+                <svg id="btnSendIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="19" x2="12" y2="5"></line>
+                  <polyline points="5 12 12 5 19 12"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
 
       </div>
     </footer>
 
-    <!-- Slide-over Drawer / Sidebar -->
+      </div>
+    </footer>
+
+    <!-- Slide-over Drawer / Sidebar (Antigravity 2.0 Style) -->
     <div class="drawer-backdrop" id="drawerBackdrop">
-      <div class="drawer" id="drawer">
-        <div class="drawer-header">
-          <span class="drawer-title">منو و گفتگوها</span>
-          <button id="btnCloseDrawer" class="icon-btn" title="بستن منو" aria-label="Close Drawer">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
+      <div class="drawer agy-sidebar" id="drawer">
+        
+        <!-- Sidebar Top Nav -->
+        <div class="agy-sidebar-header">
+          <div class="agy-nav-tools">
+            <button class="icon-btn-sm" onclick="closeDrawer()" title="بستن منو" aria-label="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            <button class="icon-btn-sm" onclick="history.back()" title="Back"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+            <button class="icon-btn-sm" onclick="history.forward()" title="Forward"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+            <button class="icon-btn-sm" onclick="openChatSearchModal()" title="Search Conversations"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></button>
+          </div>
+          
+          <button id="btnDrawerNewChat" class="agy-new-conversation-btn" onclick="createNewChat()">
+            <span>+ New Conversation</span>
           </button>
-        </div>
-
-        <div class="drawer-content">
-          <!-- Antigravity Google Account Card in Drawer -->
-          <div class="drawer-user-card" id="drawerUserCard">
-            <div class="user-avatar-wrap">
-              <div class="user-avatar-badge google-badge" id="drawerUserAvatar">G</div>
-              <div class="user-status-indicator online"></div>
-            </div>
-            <div class="user-meta-info" id="btnDrawerOpenQuota" style="cursor: pointer;">
-              <span class="user-name" id="drawerUserName">mr.x.level.3@gmail.com</span>
-              <span class="user-role" id="drawerAccountTier">Google Antigravity</span>
-            </div>
-            <button id="btnDrawerQuota" class="drawer-quota-btn" title="مشاهده سهمیه و اعتبارات مدل‌ها">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
-                <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
-              </svg>
-              <span>سهمیه</span>
-            </button>
-          </div>
-
-          <!-- Active Project Card & Switcher -->
-          <div class="drawer-project-box">
-            <div class="project-box-header">
-              <span class="project-box-label">پروژه فعال</span>
-              <button id="btnDrawerOpenProjects" class="project-manage-link" title="تغییر یا ایجاد پروژه">
-                <span>تغییر پروژه</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              </button>
-            </div>
-            <div class="project-active-card" id="projectActiveCard">
-              <div class="project-card-main" id="btnActiveProjectInfo">
-                <span class="project-card-icon">📂</span>
-                <div class="project-card-text">
-                  <div class="project-card-name" id="drawerProjectName">پروژه اصلی</div>
-                  <div class="project-card-path" id="drawerProjectPath" title="مسیر پروژه">~</div>
-                </div>
-              </div>
-              <button id="btnDrawerNewProject" class="project-card-quick-add" title="افزودن پروژه جدید">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- Quick Navigation Actions -->
-          <div class="drawer-nav-group">
-            <button id="btnDrawerNewChat" class="new-chat-btn">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              گفتگوی جدید در این پروژه
-            </button>
-
-            <button id="btnDrawerProjects" class="drawer-action-btn">
-              <div class="drawer-action-info">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                </svg>
-                <span>مدیریت پروژه‌ها (Projects)</span>
-              </div>
-              <span class="proc-badge" id="projectsBadgeDrawer">1</span>
-            </button>
-
-            <button id="btnDrawerProcesses" class="drawer-action-btn">
-              <div class="drawer-action-info">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="3"></circle>
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                </svg>
-                <span>پروسه‌های پس‌زمینه</span>
-              </div>
-              <span class="proc-badge" id="procBadgeDrawer">0</span>
-            </button>
-
-            <button id="btnDrawerFiles" class="drawer-action-btn">
-              <div class="drawer-action-info">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                </svg>
-                <span>فایل‌های پروژه</span>
-              </div>
-            </button>
-
-            <button id="btnDrawerGuide" class="drawer-action-btn">
-              <div class="drawer-action-info">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <path d="M12 16v-4"></path>
-                  <path d="M12 8h.01"></path>
-                </svg>
-                <span>راهنما و توضیحات سیستم</span>
-              </div>
-            </button>
-
-            <button id="btnDrawerRestart" class="drawer-action-btn danger">
-              <div class="drawer-action-info">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="23 4 23 10 17 10"></polyline>
-                  <polyline points="1 20 1 14 7 14"></polyline>
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                </svg>
-                <span>راه‌اندازی مجدد موتور (Restart)</span>
-              </div>
-            </button>
-          </div>
-
-          <div class="drawer-section-header">
-            <span class="drawer-section-title">گفتگوهای این پروژه</span>
-            <span class="drawer-chat-count" id="drawerChatCount">0 گفتگو</span>
-          </div>
-          <div class="chats-list" id="chatsList">
-            <!-- Dynamic Chat Items -->
-          </div>
-        </div>
-
-        <div class="drawer-footer">
-          <div class="setting-group">
-            <label class="setting-label" for="modelSelect">مدل هوش مصنوعی:</label>
-            <select id="modelSelect" class="setting-select"></select>
-          </div>
-
-          <div class="setting-group">
-            <span class="setting-label">پوشه کاری (Workspace):</span>
-            <span id="workspacePathText" class="setting-path-text">~</span>
-          </div>
-
-          <div class="setting-group">
-            <button id="btnOpenAccountQuota" class="drawer-action-btn" style="margin-top: 6px; padding: 6px 10px;">
-              <div class="drawer-action-info">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <span>حساب گوگل و سهمیه مدل‌ها</span>
-              </div>
+          
+          <div class="agy-quick-links">
+            <button class="agy-quick-link" onclick="openSystemGuideModal()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <span>Automations</span>
             </button>
           </div>
         </div>
+
+        <!-- Projects & Tree Content -->
+        <div class="agy-sidebar-scroll">
+          <div class="agy-tree-section">
+            <div class="agy-section-title-row">
+              <span class="agy-section-title">Projects</span>
+              <div class="agy-section-actions">
+                <button class="icon-btn-xs" title="Filter Projects" onclick="toggleProjectFilter()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg></button>
+                <button class="icon-btn-xs" onclick="promptNewProject()" title="New Project"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg></button>
+              </div>
+            </div>
+            
+            <input type="text" id="projectFilterInput" class="agy-sidebar-filter-input" placeholder="Search projects & chats..." style="display:none;" oninput="window.filterDrawerProjects(this.value)">
+
+            <div class="agy-projects-list" id="sidebarProjectsTree">
+              <!-- Dynamically populated project folders & chats -->
+            </div>
+          </div>
+
+          <!-- Standalone Conversations -->
+          <div class="agy-tree-section" style="margin-top: 14px;">
+            <div class="agy-section-title-row">
+              <span class="agy-section-title">Conversations</span>
+              <button class="icon-btn-xs" onclick="createNewChat()" title="New Chat"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+            </div>
+            <div class="agy-standalone-chats" id="sidebarStandaloneChats">
+              <!-- Dynamically populated standalone chats -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar Footer (Settings & User Card) -->
+        <div class="agy-sidebar-footer">
+          <button class="agy-settings-trigger" onclick="openSettingsModal()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>Settings</span>
+          </button>
+          
+          <div class="agy-user-card" id="sidebarUserCard" onclick="openSettingsModal()">
+            <div class="agy-user-avatar">
+              <span id="userAvatarText">M</span>
+            </div>
+            <div class="agy-user-details">
+              <div class="agy-user-name" id="sidebarUserName">Mani Khalili</div>
+              <div class="agy-user-email" id="sidebarUserEmail">mani.khalili1379@gmail.com</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
       </div>
     </div>
 
@@ -702,6 +608,264 @@
       </div>
     </div>
 
+    <!-- Universal Chat Search Engine Modal -->
+    <div class="modal-backdrop" id="chatSearchModal">
+      <div class="agy-search-dialog">
+        <div class="agy-search-header">
+          <svg class="agy-search-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="chatSearchInput" class="agy-search-input" placeholder="Search across all conversations & messages..." autocomplete="off">
+          <button type="button" class="icon-btn-xs" onclick="closeChatSearchModal()" title="Close">✕</button>
+        </div>
+        <div class="agy-search-results" id="chatSearchResults">
+          <div class="agy-search-hint">Type to search inside messages, queries, and project chats...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Device Folder & Storage Explorer Modal -->
+    <div class="modal-backdrop" id="folderPickerModal">
+      <div class="agy-folder-picker-dialog">
+        <div class="modal-header">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="modal-title">📁 مرورگر حافظه دستگاه و ساخت پروژه</span>
+          </div>
+          <button type="button" class="icon-btn" onclick="closeFolderPickerModal()" title="بستن">✕</button>
+        </div>
+        
+        <div class="modal-body agy-fp-body">
+          <p class="agy-fp-subtext">پوشه‌ای را از حافظه دستگاه انتخاب کنید یا با زدن دکمه «+ ساخت پوشه»، یک پوشه جدید بسازید تا پروژه در آن اجرا شود.</p>
+          
+          <!-- Quick Root Chips (Scrollable) -->
+          <div class="agy-fp-roots-row" id="fpQuickRoots">
+            <!-- Dynamically populated chips: 📱 حافظه گوشی, 📁 پروژه‌ها, 🏠 Home, 📥 دانلودها, 💻 دسکتاپ -->
+          </div>
+
+          <!-- Browser Header: Breadcrumbs & Actions -->
+          <div class="agy-fp-nav-bar">
+            <div class="agy-fp-breadcrumbs" id="fpBreadcrumbs">
+              <span class="agy-fp-crumb">در حال بارگذاری...</span>
+            </div>
+            <div class="agy-fp-nav-actions">
+              <button type="button" class="agy-btn-ghost-sm" id="fpBtnParent" title="پوشه بالاتر" onclick="window.navigateFpParent()">⬆ بالا</button>
+              <button type="button" class="agy-btn-mono-sm" id="fpBtnToggleMkdir" title="ساخت پوشه جدید در این مسیر" onclick="window.toggleFpMkdir()">➕ ساخت پوشه</button>
+              <button type="button" class="icon-btn-xs" title="تازه‌سازی" onclick="window.refreshFpDir()">🔄</button>
+            </div>
+          </div>
+
+          <!-- Inline New Folder Form (Collapsible) -->
+          <div class="agy-fp-mkdir-panel" id="fpMkdirPanel" style="display:none;">
+            <div class="agy-fp-mkdir-row">
+              <input type="text" id="fpNewFolderName" class="project-form-input" placeholder="نام پوشه جدید (مثلاً: my-telegram-bot)..." autocomplete="off">
+              <button type="button" class="agy-btn-mono" style="padding:6px 14px;font-size:12px;" onclick="window.submitFpMkdir()">✓ ساخت پوشه</button>
+              <button type="button" class="agy-btn-ghost" style="padding:6px 10px;font-size:12px;" onclick="window.toggleFpMkdir(false)">✕</button>
+            </div>
+          </div>
+
+          <!-- Folder List Container -->
+          <div class="agy-fp-dir-list" id="fpDirList">
+            <div class="agy-fp-loading">در حال خواندن پوشه‌های حافظه...</div>
+          </div>
+
+          <!-- Selected Project Details & Confirmation -->
+          <div class="agy-fp-footer-card">
+            <div class="agy-fp-selected-path-row">
+              <span class="agy-fp-path-label">مسیر انتخابی در حافظه:</span>
+              <span class="agy-fp-path-val ltr-text" id="fpCurrentPathDisplay" dir="ltr">...</span>
+            </div>
+
+            <div class="project-form-row" style="margin-top:6px;margin-bottom:8px;">
+              <label class="project-form-label" for="fpProjectName">نام پروژه:</label>
+              <input type="text" id="fpProjectName" class="project-form-input" placeholder="مثلاً: وب‌سایت، ربات تلگرام، اپلیکیشن..." autocomplete="off">
+            </div>
+
+            <div class="create-project-actions">
+              <button type="button" id="btnConfirmFolderPicker" class="btn-primary-action" onclick="window.submitFolderPicker()">✓ تایید و شروع کار در این پوشه</button>
+              <button type="button" class="btn-secondary-action" onclick="closeFolderPickerModal()">انصراف</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Antigravity 2.0 Minimal Monochrome Settings Window (Full-Screen on Mobile, Clean Minimalist on Desktop) -->
+    <div class="modal-backdrop" id="settingsModal">
+      <div class="agy-settings-window">
+        
+        <!-- Mobile Top App Bar -->
+        <div class="agy-settings-mobile-header">
+          <div class="agy-sm-title-wrap">
+            <span class="agy-sm-title">Settings</span>
+          </div>
+          <button type="button" class="agy-sm-close-btn" onclick="closeSettingsModal()" aria-label="Close Settings">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Navigation Sidebar (Clean Minimalist Monochrome) -->
+        <div class="agy-settings-sidebar">
+          <div class="agy-settings-nav-section">
+            <div class="agy-settings-nav-header desktop-only">Settings</div>
+            <button type="button" class="agy-settings-nav-item active" data-tab="projects" onclick="switchSettingsTab('projects')">Projects & Chats</button>
+            <button type="button" class="agy-settings-nav-item" data-tab="general" onclick="switchSettingsTab('general')">General</button>
+            <button type="button" class="agy-settings-nav-item" data-tab="models" onclick="switchSettingsTab('models')">Models</button>
+          </div>
+
+          <div class="agy-settings-sidebar-bottom desktop-only">
+            <div class="agy-settings-user-card" id="settingsUserCard">
+              <div class="agy-user-avatar" id="settingsUserAvatar">M</div>
+              <div class="agy-user-details">
+                <div class="agy-user-name" id="settingsUserName">Mani Khalili</div>
+                <div class="agy-user-email" id="settingsUserEmail">mani.khalili1379@gm...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="agy-settings-content">
+          <button type="button" class="agy-settings-close-btn desktop-only" onclick="closeSettingsModal()" title="Close">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+
+          <!-- Tab: Projects & Chats Management -->
+          <div class="agy-settings-pane active" id="pane-projects">
+            <div class="agy-pane-header">
+              <h2 class="agy-pane-title">Projects & Chats</h2>
+              <p class="agy-pane-desc">Manage project workspaces, customize folder paths, and delete or organize conversation histories.</p>
+            </div>
+
+            <div class="agy-setting-group">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <div class="agy-group-title">Workspaces & Project Folders</div>
+                <button type="button" class="agy-btn-mono" onclick="window.promptNewProject()">+ Add Folder</button>
+              </div>
+              <p class="agy-group-subtitle">Each project is linked to a directory on your device. Commands and tool executions run in that directory.</p>
+              
+              <div class="agy-projects-mgmt-list" id="settingsProjectsMgmtList">
+                <!-- Dynamically loaded project cards with delete buttons & chats -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: General (Execution, Permissions & Audio) -->
+          <div class="agy-settings-pane" id="pane-general">
+            <div class="agy-pane-header">
+              <h2 class="agy-pane-title">General</h2>
+              <p class="agy-pane-desc">Configure agent execution permissions, policies, and audio feedback.</p>
+            </div>
+
+            <!-- Global Permissions -->
+            <div class="agy-setting-group">
+              <div class="agy-group-title">Global Permissions</div>
+              <p class="agy-group-subtitle">Controls the actions and command execution permissions for the Antigravity agent.</p>
+              <div class="agy-setting-card">
+                <div class="agy-setting-row">
+                  <div class="agy-row-info">
+                    <div class="agy-row-label">Permission Preset</div>
+                    <div class="agy-row-desc">Controls whether the agent executes shell commands and file tools automatically or asks for confirmation.</div>
+                  </div>
+                  <div class="agy-row-control">
+                    <select id="settingPermissionPreset" class="agy-select" onchange="autoSaveSetting('permission_preset', this.value)">
+                      <option value="Turbo">Turbo (Direct Execution)</option>
+                      <option value="Auto">Auto (Smart Autonomy)</option>
+                      <option value="Request Review">Request Review (Confirm Every Action)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Agent Behavior & Execution -->
+            <div class="agy-setting-group">
+              <div class="agy-group-title">Agent Behavior & Execution</div>
+              <div class="agy-setting-card">
+                <div class="agy-setting-row">
+                  <div class="agy-row-info">
+                    <div class="agy-row-label">Plan Review Policy</div>
+                    <div class="agy-row-desc">Whether the agent asks you to review its plan and artifact documents before proceeding.</div>
+                  </div>
+                  <div class="agy-row-control">
+                    <select id="settingPlanPolicy" class="agy-select" onchange="autoSaveSetting('artifact_review', this.value)">
+                      <option value="Always Ask">Always Ask</option>
+                      <option value="Auto">Auto</option>
+                      <option value="Never">Never</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="agy-setting-row">
+                  <div class="agy-row-info">
+                    <div class="agy-row-label">Queued Messages</div>
+                    <div class="agy-row-desc">Configure how follow-up messages are sent when the agent is currently thinking.</div>
+                  </div>
+                  <div class="agy-row-control">
+                    <div class="agy-segmented-control" id="ctrlQueuedMessages">
+                      <button type="button" class="agy-seg-btn active" onclick="setSegmentedValue('ctrlQueuedMessages', 'Queue', 'queued_messages')">Queue</button>
+                      <button type="button" class="agy-seg-btn" onclick="setSegmentedValue('ctrlQueuedMessages', 'Send Immediately', 'queued_messages')">Send Immediately</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sound & Audio Feedback -->
+            <div class="agy-setting-group">
+              <div class="agy-group-title">Audio Feedback</div>
+              <div class="agy-setting-card">
+                <div class="agy-setting-row toggle-row">
+                  <div class="agy-row-info">
+                    <div class="agy-row-label">Enable Audio Chime for Completed Turns</div>
+                    <div class="agy-row-desc">Plays a pleasant completion chime through Web Audio when the agent completes an execution.</div>
+                  </div>
+                  <div class="agy-row-control">
+                    <label class="agy-switch">
+                      <input type="checkbox" id="settingEnableSounds" onchange="autoSaveSetting('enable_sounds', this.checked)">
+                      <span class="agy-switch-slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="agy-setting-row">
+                  <div class="agy-row-info">
+                    <div class="agy-row-label">Chime Volume</div>
+                    <div class="agy-row-desc">Set the volume of the audio feedback.</div>
+                  </div>
+                  <div class="agy-row-control">
+                    <div class="agy-slider-wrap">
+                      <input type="range" id="settingSoundVolume" min="0" max="100" value="100" class="agy-range" oninput="document.getElementById('settingVolumeLabel').textContent = this.value + '%'" onchange="autoSaveSetting('sound_volume', this.value)">
+                      <span class="agy-slider-val" id="settingVolumeLabel">100%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Models -->
+          <div class="agy-settings-pane" id="pane-models">
+            <div class="agy-pane-header">
+              <h2 class="agy-pane-title">Models</h2>
+              <p class="agy-pane-desc">AI models discovered from local Antigravity CLI. Select the default model for new conversations.</p>
+            </div>
+            <div class="agy-setting-group">
+              <div class="agy-setting-card" id="settingsModelsListContainer">
+                <!-- Dynamically populated from agy models -->
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
     <!-- Feature 0.3: System Guide Modal -->
     <div class="modal-backdrop" id="systemGuideModal">
       <div class="modal-dialog modal-lg">
@@ -748,8 +912,8 @@
   </div>
 
   <!-- Local Offline Scripts -->
-  <script src="/js/marked.min.js?v=3.4"></script>
-  <script src="/js/highlight.min.js?v=3.4"></script>
-  <script src="/js/app.js?v=3.4"></script>
+  <script src="/js/marked.min.js?v=3.5"></script>
+  <script src="/js/highlight.min.js?v=3.5"></script>
+  <script src="/js/app.js?v=3.5"></script>
 </body>
 </html>

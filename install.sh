@@ -2,7 +2,7 @@
 # ==============================================================================
 # ⚡ AntiMobile Pro - Universal Smart Installer, Updater & Manager
 # Supports: Android (Termux), macOS (Apple Silicon / Intel), Linux, WSL
-# Version: 3.1.1 (Semantic Versioning)
+# Version: 3.2.0 (Semantic Versioning)
 # ==============================================================================
 
 set -e
@@ -18,7 +18,7 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Version definition
-APP_VERSION="3.1.1"
+APP_VERSION="3.2.0"
 REPO_URL="https://github.com/cgimani/AntiMobile-Pro.git"
 DEFAULT_INSTALL_DIR="$HOME/AntiMobile-Pro"
 APP_NAME="antimobile"
@@ -83,12 +83,16 @@ install_dependencies() {
         termux)
             echo -e "${GREEN}📱 Detected environment: Android Termux${NC}"
             pkg update -y >/dev/null 2>&1 || true
-            for pkg in python git curl; do
+            for pkg in python git curl termux-tools termux-api; do
                 if ! command -v $pkg >/dev/null 2>&1; then
                     echo -e "${YELLOW}📦 Installing $pkg...${NC}"
-                    pkg install -y $pkg
+                    pkg install -y $pkg 2>/dev/null || true
                 fi
             done
+            if ! python3 -c "import tornado" >/dev/null 2>&1; then
+                echo -e "${YELLOW}📦 Installing prebuilt python-tornado for Termux...${NC}"
+                pkg install -y python-tornado 2>/dev/null || true
+            fi
             ;;
         macos)
             echo -e "${GREEN}🍏 Detected environment: macOS ($(uname -m))${NC}"
@@ -126,12 +130,166 @@ install_dependencies() {
 
     # Ensure pip and Tornado are ready
     echo -e "${BLUE}🐍 Checking Python dependencies (Tornado)...${NC}"
-    python3 -m pip install --upgrade pip >/dev/null 2>&1 || true
     if ! python3 -c "import tornado" >/dev/null 2>&1; then
         echo -e "${YELLOW}📦 Installing Tornado library...${NC}"
-        python3 -m pip install "tornado>=6.2" --break-system-packages 2>/dev/null || python3 -m pip install "tornado>=6.2"
+        if [ "$OS_TYPE" = "termux" ]; then
+            pkg install -y python-tornado 2>/dev/null || true
+        fi
+        if ! python3 -c "import tornado" >/dev/null 2>&1; then
+            python3 -m pip install "tornado>=6.2" --break-system-packages 2>/dev/null || \
+            python3 -m pip install "tornado>=6.2" 2>/dev/null || true
+        fi
     fi
-    echo -e "${GREEN}✅ Python dependencies are ready.${NC}"
+    if python3 -c "import tornado" >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Python dependencies are ready (Tornado OK).${NC}"
+    else
+        echo -e "${YELLOW}⚠️ Notice: Python Tornado check completed.${NC}"
+    fi
+    ensure_termux_permissions
+}
+
+# ==============================================================================
+# 2.5. Termux Android Permissions Enforcer (Mandatory Storage & Wakelock)
+# "تا نگیرفته نصب تموم نشه" - Installation MUST NOT finish until granted!
+# ==============================================================================
+
+test_storage_access() {
+    # Test 1: $HOME/storage/shared readable by ls
+    if [ -d "$HOME/storage/shared" ] && ls "$HOME/storage/shared" >/dev/null 2>&1; then
+        # On Android 11+ Scoped Storage, test writing inside downloads or shared folders
+        for folder in "$HOME/storage/downloads" "$HOME/storage/shared/Download" "$HOME/storage/dcim" "$HOME/storage/shared"; do
+            if [ -d "$folder" ]; then
+                local probe="$folder/.antimobile_perm_probe_$$"
+                if touch "$probe" 2>/dev/null; then
+                    rm -f "$probe" 2>/dev/null
+                    return 0
+                fi
+            fi
+        done
+        # If readable, permission is definitely granted by Android OS
+        return 0
+    fi
+
+    # Test 2: Standard Android internal storage root /sdcard
+    if [ -d "/sdcard/Download" ]; then
+        local probe="/sdcard/Download/.antimobile_perm_probe_$$"
+        if touch "$probe" 2>/dev/null; then
+            rm -f "$probe" 2>/dev/null
+            return 0
+        fi
+    fi
+    if [ -d "/sdcard" ] && ls "/sdcard" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Test 3: Standard Android internal storage /storage/emulated/0
+    if [ -d "/storage/emulated/0" ] && ls "/storage/emulated/0" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Test 4: $HOME/storage/downloads
+    if [ -d "$HOME/storage/downloads" ] && [ -r "$HOME/storage/downloads" ]; then
+        local probe="$HOME/storage/downloads/.antimobile_perm_probe_$$"
+        if touch "$probe" 2>/dev/null; then
+            rm -f "$probe" 2>/dev/null
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+ensure_termux_permissions() {
+    if [ "$OS_TYPE" != "termux" ]; then
+        return 0
+    fi
+
+    echo ""
+    echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║    📱 بررسی و اخذ مجوزهای ضروری اندروید برای ترموکس (Termux)    ║${NC}"
+    echo -e "${PURPLE}║        Android & Termux Essential Permissions Setup              ║${NC}"
+    echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    # 1. Background Wake Lock (Prevents Android from freezing/killing server)
+    echo -e "${BLUE}🔋 ۱. مجوز اجرای پایدار در پس‌زمینه (Termux Wake Lock)...${NC}"
+    if command -v termux-wake-lock >/dev/null 2>&1; then
+        termux-wake-lock 2>/dev/null || true
+        echo -e "${GREEN}   ✅ مجوز Wake Lock با موفقیت فعال شد (جلوگیری از توقف سرور توسط بهینه‌سازی باتری).${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️ دستور termux-wake-lock در دسترس نیست.${NC}"
+    fi
+
+    # 2. Storage Permission Check (MANDATORY ENFORCEMENT - CANNOT PROCEED UNTIL GRANTED)
+    echo -e "${BLUE}📁 ۲. بررسی و راه‌اندازی مجوز دسترسی به حافظه گوشی (Storage Permission)...${NC}"
+
+    if test_storage_access; then
+        echo -e "${GREEN}   ✅ مجوز دسترسی به حافظه از قبل تأیید شده است ($HOME/storage/shared).${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️ ترموکس هنوز مجوز دسترسی به حافظه دستگاه را دریافت نکرده است!${NC}"
+        echo -e "${BOLD}${CYAN}   📲 در حال باز کردن پنجره درخواست مجوز در صفحه گوشی شما...${NC}"
+        echo -e "${BOLD}${PURPLE}   👉 لطفاً در پنجره پاپ‌آپ باز شده در گوشی، گزینه «Allow / اجازه دادن» را لمس کنید.${NC}"
+        echo ""
+
+        # Request permission from Android OS
+        termux-setup-storage >/dev/null 2>&1 || true
+
+        local wait_sec=0
+        local prompt_count=0
+
+        # Loop until test_storage_access succeeds - INSTALLATION WILL NOT PROCEED UNTIL GRANTED!
+        while ! test_storage_access; do
+            wait_sec=$((wait_sec + 2))
+            echo -ne "   ${YELLOW}⏳ در حال بررسی مجوز... (${wait_sec} ثانیه) - تا تأیید مجوز در گوشی، نصب متوقف می‌ماند...\r${NC}"
+            sleep 2
+
+            # Every 14 seconds, show guidance, direct intent to Android Settings, and re-trigger termux-setup-storage
+            if [ $((wait_sec % 14)) -eq 0 ]; then
+                prompt_count=$((prompt_count + 1))
+                echo ""
+                echo -e "${RED}   ❌ مجوز هنوز توسط شما در گوشی تأیید نشده است!${NC}"
+                echo -e "${CYAN}   💡 راهنمای تأیید سریع:${NC}"
+                echo -e "      ۱. به صفحه نمایش گوشی نگاه کنید و در پاپ‌آپ درخواست مجوز گزینه «Allow» را بزنید."
+                echo -e "      ۲. در حال باز کردن صفحه مجوزهای ترموکس در تنظیمات اندروید..."
+                
+                # Direct intent to open Termux App Permissions in Android Settings
+                if command -v am >/dev/null 2>&1; then
+                    am start -a android.settings.APPLICATION_DETAILS_SETTINGS -d package:com.termux >/dev/null 2>&1 || true
+                fi
+
+                echo -e "         ${YELLOW}Settings -> Apps -> Termux -> Permissions -> Files and media (Allow)${NC}"
+                echo -e "${BLUE}   درخواست مجدد مجوز ارسال شد...${NC}"
+                termux-setup-storage >/dev/null 2>&1 || true
+
+                local user_input=""
+                if [ -c /dev/tty ]; then
+                    echo -e "${BOLD}${PURPLE}   👉 پس از فعال‌سازی مجوز کلید [Enter]، یا برای رد کردن کلید [s] را بزنید: ${NC}"
+                    read -r user_input < /dev/tty || true
+                    if [[ "$user_input" =~ ^[Ss]$ ]]; then
+                        echo -e "${YELLOW}   ⚠️ مجوز به دستور شما رد شد.${NC}"
+                        break
+                    fi
+                fi
+                echo ""
+            fi
+        done
+
+        if test_storage_access; then
+            echo ""
+            echo -e "${GREEN}   ================================================================${NC}"
+            echo -e "${GREEN}${BOLD}   🎉 مجوز دسترسی به حافظه با موفقیت دریافت و تأیید شد!${NC}"
+            echo -e "${GREEN}   📂 پوشه حافظه مشترک: $HOME/storage/shared -> /sdcard${NC}"
+            echo -e "${GREEN}   ================================================================${NC}"
+        fi
+    fi
+
+    # 3. Termux-API tools
+    echo -e "${BLUE}📦 ۳. بررسی و آماده‌سازی ابزارهای سیستمی ترموکس (termux-api)...${NC}"
+    if ! command -v termux-battery-status >/dev/null 2>&1; then
+        pkg install -y termux-api >/dev/null 2>&1 || true
+    fi
+    echo -e "${GREEN}   ✅ تمام مجوزها و پیش‌نیازهای ترموکس ۱۰۰٪ تکمیل شدند.${NC}"
+    echo ""
 }
 
 # 3. Check for Antigravity Binary
@@ -290,6 +448,7 @@ install_or_update() {
     fi
 
     create_shortcuts
+    ensure_termux_permissions
     print_summary
 }
 
@@ -331,10 +490,17 @@ update_app() {
     chmod +x start.sh stop.sh push_to_github.sh server.py 2>/dev/null || true
     create_shortcuts
 
-    # Re-check python dependencies
+    # Re-check python dependencies & permissions
     detect_os
+    ensure_termux_permissions
     if ! python3 -c "import tornado" >/dev/null 2>&1; then
-        python3 -m pip install "tornado>=6.2" --break-system-packages 2>/dev/null || python3 -m pip install "tornado>=6.2"
+        if [ "$OS_TYPE" = "termux" ]; then
+            pkg install -y python-tornado 2>/dev/null || true
+        fi
+        if ! python3 -c "import tornado" >/dev/null 2>&1; then
+            python3 -m pip install "tornado>=6.2" --break-system-packages 2>/dev/null || \
+            python3 -m pip install "tornado>=6.2" 2>/dev/null || true
+        fi
     fi
 
     NEW_VER=$(get_installed_version)

@@ -25,7 +25,7 @@ import tornado.websocket
 import tornado.ioloop
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "3.1.1"
+APP_VERSION = "3.2.0"
 PORT = int(os.environ.get('PORT', 7681))
 HOST = os.environ.get('HOST', '0.0.0.0')
 HISTORY_FILE = os.path.join(WORKSPACE_DIR, 'chat_history.json')
@@ -64,9 +64,11 @@ CACHED_MODELS = [
     {"id": "gpt-oss-120b-medium", "name": "GPT-OSS 120B (Medium)"}
 ]
 
-def fetch_models_from_cli() -> List[Dict[str, str]]:
-    """Dynamically discover models supported by the installed agy binary."""
+def fetch_models_from_cli(force_refresh: bool = False) -> List[Dict[str, str]]:
+    """Dynamically discover models supported by the installed agy binary with instant in-memory cache."""
     global CACHED_MODELS
+    if not force_refresh and CACHED_MODELS and len(CACHED_MODELS) > 1:
+        return CACHED_MODELS
     agy = find_agy_binary()
     if not os.path.isfile(agy):
         return CACHED_MODELS
@@ -93,8 +95,16 @@ def extract_turn_thinking(conv_id: Optional[str]) -> Tuple[str, int]:
     """Extract step thinking and token count from the conversation transcript."""
     if not conv_id:
         return "", 0
-    transcript_path = os.path.expanduser(f"~/.gemini/antigravity-cli/brain/{conv_id}/.system_generated/logs/transcript.jsonl")
-    if not os.path.exists(transcript_path):
+    candidate_paths = [
+        os.path.expanduser(f"~/.gemini/antigravity/brain/{conv_id}/.system_generated/logs/transcript.jsonl"),
+        os.path.expanduser(f"~/.gemini/antigravity-cli/brain/{conv_id}/.system_generated/logs/transcript.jsonl")
+    ]
+    transcript_path = None
+    for cp in candidate_paths:
+        if os.path.exists(cp):
+            transcript_path = cp
+            break
+    if not transcript_path:
         return "", 0
     try:
         with open(transcript_path, 'r', encoding='utf-8', errors='replace') as f:
@@ -241,6 +251,104 @@ class AuthManager:
         self.save()
         return True, "اطلاعات ورود با موفقیت به‌روزرسانی شد."
 
+def get_desktop_antigravity_data():
+    db_path = os.path.expanduser('~/.gemini/antigravity/conversation_summaries.db')
+    if not os.path.isfile(db_path):
+        return [], []
+    try:
+        import sqlite3, urllib.parse, datetime
+        conn = sqlite3.connect(db_path, timeout=5)
+        c = conn.cursor()
+        query = '''
+        SELECT 
+            conversation_id, 
+            coalesce(nullif(title,''), nullif(preview,''), 'Untitled Conversation') as display_title,
+            workspace_uris, 
+            last_modified_time
+        FROM conversation_summaries
+        ORDER BY last_modified_time DESC
+        '''
+        c.execute(query)
+        rows = c.fetchall()
+        conn.close()
+
+        def format_rel(dt_str):
+            try:
+                if isinstance(dt_str, str):
+                    clean_dt = dt_str.split('+')[0].split('.')[0]
+                    dt = datetime.datetime.strptime(clean_dt, '%Y-%m-%d %H:%M:%S')
+                else:
+                    return ''
+                now = datetime.datetime.utcnow()
+                diff = max(0, (now - dt).total_seconds())
+                if diff < 120: return 'now'
+                if diff < 3600: return f'{int(diff//60)}m'
+                if diff < 86400: return f'{int(diff//3600)}h'
+                return f'{int(diff//86400)}d'
+            except Exception:
+                return ''
+
+        projects_map = {}
+        standalone_list = []
+
+        for cid, title, uris, lmt in rows:
+            rel_time = format_rel(lmt)
+            chat_item = {
+                'id': cid,
+                'title': title,
+                'time_str': rel_time,
+                'is_active': False
+            }
+            
+            ws_name = None
+            ws_path = ''
+            if uris:
+                try:
+                    arr = json.loads(uris)
+                    if arr and len(arr) > 0:
+                        raw_path = urllib.parse.unquote(arr[0].replace('file://', ''))
+                        ws_path = raw_path
+                        ws_name = os.path.basename(raw_path.rstrip('/'))
+                except Exception:
+                    pass
+
+            if not ws_name or ws_name in ('x', 'Standalone'):
+                standalone_list.append(chat_item)
+            else:
+                if ws_name not in projects_map:
+                    projects_map[ws_name] = {
+                        'id': f'proj_{ws_name}',
+                        'name': ws_name,
+                        'path': ws_path,
+                        'chats': []
+                    }
+                projects_map[ws_name]['chats'].append(chat_item)
+
+        curr_dir_name = os.path.basename(WORKSPACE_DIR)
+        res_projects = []
+        if curr_dir_name in projects_map:
+            p = projects_map.pop(curr_dir_name)
+            p['is_active'] = True
+            if p['chats']:
+                p['chats'][0]['is_active'] = True
+            res_projects.append(p)
+        else:
+            res_projects.append({
+                'id': 'proj_current',
+                'name': curr_dir_name,
+                'path': WORKSPACE_DIR,
+                'chats': [],
+                'is_active': True
+            })
+
+        for k, p in projects_map.items():
+            res_projects.append(p)
+
+        return res_projects, standalone_list
+    except Exception as e:
+        print(f"[WARN] Error reading desktop antigravity data: {e}")
+        return [], []
+
 auth_manager = AuthManager()
 
 # History Manager with multi-project & atomic persistence
@@ -321,7 +429,7 @@ class HistoryManager:
                 pid = "proj_default"
                 projects[pid] = {
                     "id": pid,
-                    "name": "پروژه اصلی",
+                    "name": os.path.basename(WORKSPACE_DIR) or "antigravity_all_files",
                     "path": WORKSPACE_DIR,
                     "created_at": time.time(),
                     "active_chat_id": None,
@@ -330,6 +438,8 @@ class HistoryManager:
                 self.data["active_project_id"] = pid
 
         proj = projects[pid]
+        if proj.get("name") in ("پروژه اصلی", "پروژه"):
+            proj["name"] = os.path.basename(WORKSPACE_DIR) or "antigravity_all_files"
         # Validate project path
         if not proj.get("path") or not os.path.isdir(proj["path"]):
             proj["path"] = WORKSPACE_DIR
@@ -363,17 +473,61 @@ class HistoryManager:
     def get_projects_summary(self) -> List[Dict[str, Any]]:
         self.get_active_project()
         active_pid = self.data.get("active_project_id")
+        now = time.time()
         result = []
         for pid, proj in self.data.get("projects", {}).items():
+            proj_chats = []
+            for cid, c in proj.get("chats", {}).items():
+                up_at = c.get("updated_at") or c.get("created_at", 0)
+                diff = max(0, int(now - up_at))
+                if diff < 60:
+                    time_str = "now"
+                elif diff < 3600:
+                    time_str = f"{diff // 60}m"
+                elif diff < 86400:
+                    time_str = f"{diff // 3600}h"
+                else:
+                    time_str = f"{diff // 86400}d"
+
+                proj_chats.append({
+                    "id": cid,
+                    "title": c.get("title", "Untitled Conversation"),
+                    "created_at": c.get("created_at", 0),
+                    "updated_at": up_at,
+                    "time_str": time_str,
+                    "is_active": (cid == proj.get("active_chat_id")),
+                    "msg_count": len(c.get("messages", []))
+                })
+            proj_chats.sort(key=lambda x: x.get("updated_at", 0), reverse=True)
             result.append({
                 "id": pid,
                 "name": proj.get("name", "پروژه"),
                 "path": proj.get("path", WORKSPACE_DIR),
                 "created_at": proj.get("created_at", 0),
-                "chat_count": len(proj.get("chats", {})),
+                "chat_count": len(proj_chats),
+                "chats": proj_chats,
                 "is_active": (pid == active_pid)
             })
         result.sort(key=lambda x: (not x["is_active"], x["created_at"]))
+        return result
+
+    def get_standalone_chats(self) -> List[Dict[str, Any]]:
+        now = time.time()
+        result = []
+        for cid, c in self.data.get("chats", {}).items():
+            if not c.get("project_id"):
+                up_at = c.get("updated_at") or c.get("created_at", 0)
+                diff = max(0, int(now - up_at))
+                time_str = f"{diff // 60}m" if diff < 3600 else (f"{diff // 3600}h" if diff < 86400 else f"{diff // 86400}d")
+                result.append({
+                    "id": cid,
+                    "title": c.get("title", "Conversation"),
+                    "created_at": c.get("created_at", 0),
+                    "updated_at": up_at,
+                    "time_str": time_str,
+                    "msg_count": len(c.get("messages", []))
+                })
+        result.sort(key=lambda x: x.get("updated_at", 0), reverse=True)
         return result
 
     def create_project(self, name: str, path: str) -> Dict[str, Any]:
@@ -416,6 +570,17 @@ class HistoryManager:
         self.data["active_chat_id"] = first_cid
         self.data["workspace"] = clean_path
         self.save()
+
+        broadcast({
+            "type": "project_switched",
+            "project": {
+                "id": pid,
+                "name": clean_name,
+                "path": clean_path
+            },
+            "active_chat_id": first_cid
+        })
+
         return new_proj
 
     def switch_project(self, project_id: str) -> Optional[Dict[str, Any]]:
@@ -523,23 +688,33 @@ class HistoryManager:
         return new_chat
 
     def delete_chat(self, chat_id: str, project_id: Optional[str] = None):
+        target_proj = None
         if project_id and project_id in self.data.get("projects", {}):
-            proj = self.data["projects"][project_id]
+            target_proj = self.data["projects"][project_id]
         else:
-            proj = self.get_active_project()
+            for p in self.data.get("projects", {}).values():
+                if chat_id in p.get("chats", {}):
+                    target_proj = p
+                    break
+            if not target_proj:
+                target_proj = self.get_active_project()
 
-        chats = proj.get("chats", {})
+        chats = target_proj.get("chats", {})
         if chat_id in chats:
             del chats[chat_id]
             if not chats:
-                return self.create_chat(project_id=proj.get("id"))
-            if proj.get("active_chat_id") == chat_id:
-                proj["active_chat_id"] = next(iter(chats))
-            if proj.get("id") == self.data.get("active_project_id"):
+                return self.create_chat(project_id=target_proj.get("id"))
+            if target_proj.get("active_chat_id") == chat_id:
+                target_proj["active_chat_id"] = next(iter(chats))
+            if target_proj.get("id") == self.data.get("active_project_id"):
                 self.data["chats"] = chats
-                self.data["active_chat_id"] = proj["active_chat_id"]
+                self.data["active_chat_id"] = target_proj["active_chat_id"]
             self.save()
-        return self.get_chat(proj["active_chat_id"])
+            return self.get_chat(target_proj["active_chat_id"])
+        if chat_id in self.data.get("chats", {}):
+            del self.data["chats"][chat_id]
+            self.save()
+        return None
 
     def clear_chat(self, chat_id: str):
         chat = self.get_chat(chat_id)
@@ -653,7 +828,7 @@ def is_path_allowed(target_path: str) -> bool:
         target_abs = os.path.abspath(os.path.expanduser(target_path))
         allowed_roots = [USER_HOME, WORKSPACE_DIR]
         # Common mobile & Unix storage roots
-        for mobile_root in ['/sdcard', '/storage/emulated/0', '/data/data/com.termux/files']:
+        for mobile_root in ['/sdcard', '/storage/emulated/0', '/data/data/com.termux/files', '/storage']:
             if os.path.exists(mobile_root):
                 allowed_roots.append(mobile_root)
         # All configured projects paths
@@ -661,7 +836,19 @@ def is_path_allowed(target_path: str) -> bool:
             p_path = proj.get("path")
             if p_path:
                 allowed_roots.append(os.path.abspath(os.path.expanduser(p_path)))
-        return any(target_abs.startswith(r) for r in allowed_roots)
+
+        real_allowed = []
+        for r in allowed_roots:
+            real_allowed.append(r)
+            try:
+                rp = os.path.realpath(r)
+                if rp not in real_allowed:
+                    real_allowed.append(rp)
+            except Exception:
+                pass
+
+        target_real = os.path.realpath(target_abs)
+        return any(target_abs.startswith(r) or target_real.startswith(r) for r in real_allowed)
     except Exception:
         return False
 
@@ -776,9 +963,11 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
     cmd = [
         find_agy_binary(),
         "-p", prompt,
-        "--output-format", "stream-json",
-        "--dangerously-skip-permissions"
+        "--output-format", "stream-json"
     ]
+    perm_preset = history_mgr.data.get("permission_preset", "Turbo")
+    if perm_preset == "Turbo":
+        cmd.append("--dangerously-skip-permissions")
     if agy_conv_id:
         cmd.extend(["--conversation", agy_conv_id])
     if model:
@@ -799,9 +988,7 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
                 pass
         broadcast(payload)
 
-    # Initial status
-    send_ws({"type": "status", "status": "💭 در حال آماده‌سازی و تحلیل..."})
-
+    # Clean CLI stream execution (no synthetic fake status bubbles)
     accumulated_response: List[str] = []
     active_step_index = 0
     turn_steps: Dict[int, Dict[str, Any]] = {}
@@ -973,63 +1160,144 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
                 active_step_index = step_index
 
                 if step_type == "tool":
-                    tool_name = step.get("tool_name") or step.get("tool_info", {}).get("name", "ابزار")
+                    tool_name = step.get("tool_name") or step.get("tool_info", {}).get("name", "tool")
                     tool_info = step.get("tool_info", {})
                     params = tool_info.get("parameters", {})
                     duration = step.get("duration_seconds", 0)
 
-                    # Determine descriptive Persian title & icon
-                    if tool_name == "run_command":
-                        cmd_str = params.get("CommandLine") or params.get("command") or ""
-                        icon = "💻"
-                        title = f"اجرای دستور: {cmd_str[:55]}" if cmd_str else "اجرای دستور در ترمینال"
+                    action = "Ran"
+                    feed_type = "tool"
+                    feed_label = ""
+                    file_name = ""
+                    file_ext = ""
+                    line_range = ""
+                    add_lines = 0
+                    del_lines = 0
+                    is_command = False
+                    snippet = ""
+
+                    if tool_name in ("read_file", "view_file"):
+                        action = "Analyzed"
+                        feed_type = "read"
+                        fpath = params.get("Path") or params.get("path") or ""
+                        file_name = os.path.basename(fpath) if fpath else "file"
+                        file_ext = os.path.splitext(file_name)[1].lower().replace(".", "")
+                        sline = params.get("StartLine") or params.get("start_line")
+                        eline = params.get("EndLine") or params.get("end_line")
+                        if sline and eline:
+                            line_range = f"#L{sline}-{eline}"
+                        elif sline:
+                            line_range = f"#L{sline}"
+                        feed_label = f"{file_name} {line_range}".strip()
+
+                        if fpath:
+                            full_path = fpath if os.path.isabs(fpath) else os.path.join(cwd, fpath)
+                            if os.path.isfile(full_path):
+                                try:
+                                    with open(full_path, 'r', encoding='utf-8', errors='replace') as rf:
+                                        flines = rf.readlines()
+                                    s_idx = max(0, int(sline) - 1) if sline else 0
+                                    e_idx = int(eline) if eline else min(len(flines), s_idx + 100)
+                                    numbered = []
+                                    for idx in range(s_idx, min(e_idx, len(flines))):
+                                        numbered.append(f"{idx+1:4d} | {flines[idx]}")
+                                    snippet = "".join(numbered)
+                                except Exception:
+                                    pass
+
+                    elif tool_name in ("write_file", "write_to_file"):
+                        fpath = params.get("Path") or params.get("path") or ""
+                        file_name = os.path.basename(fpath) if fpath else "file"
+                        file_ext = os.path.splitext(file_name)[1].lower().replace(".", "")
+                        full_path = fpath if os.path.isabs(fpath) else os.path.join(cwd, fpath)
+                        content = params.get("Content") or params.get("content") or ""
+                        add_lines = len(content.splitlines()) if content else 0
+                        
+                        if not os.path.exists(full_path):
+                            action = "Created"
+                            feed_type = "create"
+                            del_lines = 0
+                            feed_label = f"{file_name} +{add_lines} -0"
+                        else:
+                            action = "Edited"
+                            feed_type = "edit"
+                            del_lines = 0
+                            feed_label = f"{file_name} +{add_lines} -0"
+                        snippet = content[:2000]
+
+                    elif tool_name in ("edit_file", "replace_file_content", "multi_replace_file_content", "sed_file"):
+                        action = "Edited"
+                        feed_type = "edit"
+                        fpath = params.get("Path") or params.get("path") or ""
+                        file_name = os.path.basename(fpath) if fpath else "file"
+                        file_ext = os.path.splitext(file_name)[1].lower().replace(".", "")
+                        target = params.get("Target") or params.get("target") or ""
+                        replacement = params.get("Replacement") or params.get("replacement") or params.get("Content") or params.get("content") or ""
+                        add_lines = len(replacement.splitlines()) if replacement else 0
+                        del_lines = len(target.splitlines()) if target else 0
+                        if add_lines == 0 and del_lines == 0:
+                            content = params.get("Content") or params.get("content") or ""
+                            add_lines = len(content.splitlines()) if content else 1
+                        feed_label = f"{file_name} +{add_lines} -{del_lines}"
+
+                    elif tool_name == "run_command":
+                        action = "Ran"
+                        feed_type = "tool"
                         is_command = True
-                    elif tool_name in ("read_file", "view_file"):
+                        cmd_str = params.get("CommandLine") or params.get("command") or ""
+                        summary = params.get("toolSummary") or params.get("tool_summary") or ""
+                        if summary:
+                            feed_label = summary.strip('"\'')
+                        elif cmd_str:
+                            feed_label = cmd_str[:60]
+                        else:
+                            feed_label = "terminal command"
+
+                    elif tool_name in ("grep_search", "find_by_name", "list_dir"):
+                        action = "Analyzed"
+                        feed_type = "tool"
                         fpath = params.get("Path") or params.get("path") or ""
-                        fname = os.path.basename(fpath) if fpath else "فایل"
-                        icon = "📂"
-                        title = f"خواندن فایل: {fname}"
-                        is_command = False
-                    elif tool_name in ("write_file", "replace_file_content", "multi_replace_file_content", "write_to_file", "edit_file"):
-                        fpath = params.get("Path") or params.get("path") or ""
-                        fname = os.path.basename(fpath) if fpath else "فایل"
-                        icon = "✏️"
-                        title = f"ویرایش فایل: {fname}"
-                        is_command = False
-                    elif tool_name in ("list_dir", "find_by_name"):
-                        icon = "📁"
-                        title = f"بررسی مسیر: {params.get('Path') or params.get('path') or ''}"
-                        is_command = False
-                    elif tool_name in ("grep_search", "search_web"):
-                        icon = "🔍"
-                        title = f"جستجو: {params.get('query') or params.get('pattern') or ''}"
-                        is_command = False
-                    elif tool_name in ("ask_permission", "ask_question", "ask_custom_permission"):
-                        icon = "🛡️"
-                        title = "درخواست تایید دسترسی"
-                        is_command = False
+                        file_name = os.path.basename(fpath) if fpath else ""
+                        query = params.get("query") or params.get("pattern") or ""
+                        if query and file_name:
+                            feed_label = f"inspect '{query}' in {file_name}"
+                        elif query:
+                            feed_label = f"inspect '{query}'"
+                        elif file_name:
+                            feed_label = f"inspect {file_name}"
+                        else:
+                            feed_label = "inspect workspace"
                     else:
-                        icon = "⚙️"
-                        title = f"عملیات: {tool_name}"
-                        is_command = False
+                        action = "Ran"
+                        feed_type = "tool"
+                        summary = params.get("toolSummary") or params.get("tool_summary") or ""
+                        feed_label = summary.strip('"\'') if summary else tool_name
 
                     if state == "ACTIVE":
                         turn_steps[step_index] = {
                             "index": step_index,
                             "tool": tool_name,
-                            "icon": icon,
-                            "title": title,
-                            "command": params.get("CommandLine") or params.get("command", ""),
-                            "path": params.get("Path") or params.get("path", ""),
-                            "query": params.get("query") or params.get("pattern", ""),
-                            "is_command": is_command,
+                            "action": action,
+                            "feed_type": feed_type,
+                            "feed_label": feed_label,
+                            "file_name": file_name,
+                            "file_ext": file_ext,
+                            "line_range": line_range,
+                            "add_lines": add_lines,
+                            "del_lines": del_lines,
                             "state": "ACTIVE",
                             "duration": 0,
-                            "output": ""
+                            "output": "",
+                            "target": params.get("Target", ""),
+                            "replacement": params.get("Replacement", "") or params.get("Content", ""),
+                            "snippet": snippet,
+                            "command": params.get("CommandLine", "")
                         }
                         active_tool_info[chat_id] = {
                             "step_index": step_index,
                             "tool_name": tool_name,
+                            "action": action,
+                            "feed_label": feed_label,
                             "is_command": is_command,
                             "command": params.get("CommandLine", ""),
                             "start_time": time.time()
@@ -1038,51 +1306,73 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
                             "type": "step_start",
                             "step_index": step_index,
                             "step_type": "tool",
+                            "action": action,
+                            "feed_type": feed_type,
+                            "feed_label": feed_label,
+                            "file_name": file_name,
+                            "file_ext": file_ext,
+                            "line_range": line_range,
+                            "add_lines": add_lines,
+                            "del_lines": del_lines,
                             "tool_name": tool_name,
-                            "icon": icon,
-                            "title": title,
                             "command": params.get("CommandLine", ""),
                             "is_command": is_command,
-                            "start_time": time.time()
-                        })
-                        cmd_display = params.get("CommandLine") or params.get("command") or params.get("Path") or ""
-                        cli_log_line = f"$ [{tool_name}] {cmd_display}" if cmd_display else f"$ [{tool_name}]"
-                        send_ws({
-                            "type": "cli_output",
-                            "line": cli_log_line,
-                            "is_err": False
-                        })
-                        send_ws({
-                            "type": "status",
-                            "status": f"{icon} {title}..."
+                            "start_time": time.time(),
+                            "target": params.get("Target", ""),
+                            "replacement": params.get("Replacement", "") or params.get("Content", ""),
+                            "snippet": snippet,
+                            "start_line": params.get("StartLine"),
+                            "end_line": params.get("EndLine"),
+                            "file_path": params.get("Path", "")
                         })
 
                     elif state == "DONE":
                         active_tool_info.pop(chat_id, None)
                         output_str = tool_info.get("output", "")
-                        if output_str:
-                            for out_line in output_str.strip().splitlines()[:12]:
-                                send_ws({
-                                    "type": "cli_output",
-                                    "line": out_line,
-                                    "is_err": False
-                                })
                         if step_index in turn_steps:
                             turn_steps[step_index]["state"] = "DONE"
-                            turn_steps[step_index]["duration"] = round(duration, 2)
+                            turn_steps[step_index]["duration"] = round(duration, 1)
                             turn_steps[step_index]["output"] = output_str
                         send_ws({
                             "type": "step_done",
                             "step_index": step_index,
                             "step_type": "tool",
+                            "action": action,
+                            "feed_type": feed_type,
+                            "feed_label": feed_label,
+                            "file_name": file_name,
+                            "file_ext": file_ext,
+                            "line_range": line_range,
+                            "add_lines": add_lines,
+                            "del_lines": del_lines,
                             "tool_name": tool_name,
-                            "duration": round(duration, 2),
-                            "output": output_str
+                            "duration": round(duration, 1),
+                            "output": output_str,
+                            "target": params.get("Target", ""),
+                            "replacement": params.get("Replacement", "") or params.get("Content", ""),
+                            "snippet": snippet,
+                            "command": params.get("CommandLine", ""),
+                            "start_line": params.get("StartLine"),
+                            "end_line": params.get("EndLine"),
+                            "file_path": params.get("Path", "")
                         })
-                        send_ws({"type": "status", "status": "💭 در حال تفکر و پردازش..."})
 
                 elif step_type == "agent_response":
                     text_delta = step.get("text_delta", "")
+                    duration = step.get("duration_seconds", 0)
+                    usage = step.get("usage", {})
+                    thinking_tokens = usage.get("thinking_tokens", 0)
+
+                    if state == "DONE" and duration >= 0.8:
+                        th_text, _ = extract_turn_thinking(conv_id)
+                        send_ws({
+                            "type": "thinking_step",
+                            "step_index": step_index,
+                            "duration": max(1, round(duration)),
+                            "thinking": th_text or "Reasoning analysis completed.",
+                            "tokens": thinking_tokens
+                        })
+
                     if text_delta:
                         accumulated_response.append(text_delta)
                         send_ws({
@@ -1435,8 +1725,14 @@ class ProjectsApiHandler(BaseApiHandler):
         active_proj = history_mgr.get_active_project()
         self.write(json.dumps({
             "projects": history_mgr.get_projects_summary(),
+            "standalone_chats": history_mgr.get_standalone_chats(),
             "active_project_id": history_mgr.data.get("active_project_id"),
-            "active_project": active_proj
+            "active_project": active_proj,
+            "user": {
+                "name": "Mani Khalili",
+                "email": "mani.khalili1379@gmail.com",
+                "avatar": "M"
+            }
         }, ensure_ascii=False))
 
     def post(self):
@@ -1533,6 +1829,154 @@ class ProjectSwitchApiHandler(BaseApiHandler):
             "success": True,
             "active_project": proj,
             "chats": history_mgr.get_chats_summary(proj["id"])
+        }, ensure_ascii=False))
+
+def get_project_context_info(project_path: str) -> Dict[str, Any]:
+    norm_path = os.path.abspath(os.path.expanduser(project_path))
+    info: Dict[str, Any] = {
+        "path": norm_path,
+        "exists": os.path.isdir(norm_path),
+        "git_branch": None,
+        "git_commit": None,
+        "has_agents_dir": False,
+        "has_gemini_md": False,
+        "has_rules": False,
+        "skills_count": 0,
+        "rules_count": 0
+    }
+    if not info["exists"]:
+        return info
+
+    git_dir = os.path.join(norm_path, ".git")
+    if os.path.exists(git_dir):
+        try:
+            b = subprocess.check_output(["git", "-C", norm_path, "branch", "--show-current"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
+            info["git_branch"] = b or "HEAD"
+            c = subprocess.check_output(["git", "-C", norm_path, "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
+            info["git_commit"] = c
+        except Exception:
+            pass
+
+    if os.path.isfile(os.path.join(norm_path, "GEMINI.md")) or os.path.isfile(os.path.join(norm_path, "AGENTS.md")):
+        info["has_gemini_md"] = True
+
+    agents_dir = os.path.join(norm_path, ".agents")
+    if not os.path.isdir(agents_dir):
+        agents_dir = os.path.join(norm_path, ".agent")
+    if os.path.isdir(agents_dir):
+        info["has_agents_dir"] = True
+        skills_dir = os.path.join(agents_dir, "skills")
+        if os.path.isdir(skills_dir):
+            try:
+                info["skills_count"] = len([d for d in os.listdir(skills_dir) if os.path.isdir(os.path.join(skills_dir, d))])
+            except Exception:
+                pass
+        rules_dir = os.path.join(agents_dir, "rules")
+        if os.path.isdir(rules_dir):
+            try:
+                info["rules_count"] = len([f for f in os.listdir(rules_dir) if f.endswith('.md')])
+                info["has_rules"] = info["rules_count"] > 0
+            except Exception:
+                pass
+    return info
+
+class SettingsApiHandler(BaseApiHandler):
+    def set_default_headers(self):
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+    def options(self, *args):
+        self.set_status(204)
+        self.finish()
+
+    def get(self):
+        active_proj = history_mgr.get_active_project() or {}
+        proj_path = active_proj.get("path", WORKSPACE_DIR)
+        context_info = get_project_context_info(proj_path)
+
+        agy_ver = "2.28.2"
+        agy_bin = find_agy_binary()
+        try:
+            res = subprocess.run([agy_bin, "--version"], capture_output=True, text=True, timeout=2)
+            if res.returncode == 0 and res.stdout.strip():
+                agy_ver = res.stdout.strip()
+        except Exception:
+            pass
+
+        global_settings = {
+            "default_model": history_mgr.data.get("default_model", "gemini-3.8-flash-high"),
+            "default_effort": history_mgr.data.get("default_effort", "high"),
+            "default_mode": history_mgr.data.get("default_mode", "auto"),
+            "permission_preset": history_mgr.data.get("permission_preset", "Turbo"),
+            "enable_sounds": history_mgr.data.get("enable_sounds", False),
+            "app_version": agy_ver,
+            "cli_binary": agy_bin,
+            "workspace_path": proj_path,
+            "git_branch": context_info.get("git_branch", "main"),
+            "models": [{"id": m.get("id"), "name": m.get("name")} for m in fetch_models_from_cli()]
+        }
+
+        self.write(json.dumps({
+            "global": global_settings,
+            "active_project": {
+                "id": active_proj.get("id"),
+                "name": active_proj.get("name"),
+                "path": proj_path,
+                "context": context_info,
+                "overrides": active_proj.get("settings", {})
+            },
+            "user": {
+                "name": "Mani Khalili",
+                "email": "mani.khalili1379@gmail.com",
+                "avatar": "M"
+            }
+        }, ensure_ascii=False))
+
+    def post(self):
+        try:
+            body = json.loads(self.request.body.decode('utf-8')) if self.request.body else {}
+        except Exception:
+            body = {}
+
+        glob = body.get("global", {})
+        allowed_keys = [
+            "default_model", "default_effort", "default_mode", "permission_preset",
+            "enable_sounds"
+        ]
+        for k in allowed_keys:
+            if k in glob:
+                history_mgr.data[k] = glob[k]
+
+        history_mgr.save()
+
+        broadcast({
+            "type": "settings_updated",
+            "model": history_mgr.data.get("default_model"),
+            "effort": history_mgr.data.get("default_effort"),
+            "mode": history_mgr.data.get("default_mode"),
+            "permission_preset": history_mgr.data.get("permission_preset", "Turbo"),
+            "enable_sounds": history_mgr.data.get("enable_sounds", False)
+        })
+
+        self.write(json.dumps({
+            "success": True,
+            "message": "تنظیمات با موفقیت ذخیره گردید."
+        }, ensure_ascii=False))
+
+class ProjectContextApiHandler(BaseApiHandler):
+    def set_default_headers(self):
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        active_proj = history_mgr.get_active_project() or {}
+        proj_path = active_proj.get("path", WORKSPACE_DIR)
+        context_info = get_project_context_info(proj_path)
+        self.write(json.dumps({
+            "project": active_proj,
+            "context": context_info
         }, ensure_ascii=False))
 
 class ChatApiHandler(BaseApiHandler):
@@ -1635,6 +2079,54 @@ class MentionsApiHandler(BaseApiHandler):
         except Exception:
             pass
         self.write(json.dumps({"items": items}, ensure_ascii=False))
+
+class SearchChatsApiHandler(BaseApiHandler):
+    def set_default_headers(self):
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        query = self.get_argument("q", "").strip().lower()
+        if not query:
+            self.write(json.dumps({"results": []}, ensure_ascii=False))
+            return
+
+        results = []
+        projects = history_mgr.data.get("projects", {})
+        for pid, proj in projects.items():
+            p_name = proj.get("name", "Project")
+            for cid, chat in proj.get("chats", {}).items():
+                title = chat.get("title", "")
+                messages = chat.get("messages", [])
+                
+                title_match = query in title.lower()
+                matched_messages = []
+                for m in messages:
+                    content = m.get("content", "")
+                    if query in content.lower():
+                        pos = content.lower().find(query)
+                        start = max(0, pos - 30)
+                        end = min(len(content), pos + len(query) + 50)
+                        matched_messages.append({
+                            "role": m.get("role", "user"),
+                            "snippet": ("..." if start > 0 else "") + content[start:end].strip() + ("..." if end < len(content) else "")
+                        })
+                        if len(matched_messages) >= 2:
+                            break
+
+                if title_match or matched_messages:
+                    results.append({
+                        "chat_id": cid,
+                        "title": title or "گفتگو",
+                        "project_id": pid,
+                        "project_name": p_name,
+                        "updated_at": chat.get("updated_at", 0),
+                        "matched_messages": matched_messages,
+                        "title_match": title_match
+                    })
+
+        results.sort(key=lambda x: (not x["title_match"], -x["updated_at"]))
+        self.write(json.dumps({"results": results[:25], "query": query}, ensure_ascii=False))
 
 class AntigravityAccountApiHandler(BaseApiHandler):
     def set_default_headers(self):
@@ -1970,6 +2462,161 @@ class ProcessInputApiHandler(BaseApiHandler):
 
         self.write(json.dumps({"success": matched, "pid": pid}))
 
+# Interactive Device Storage & Directory Browser Endpoints
+class DirectoryBrowseApiHandler(BaseApiHandler):
+    def set_default_headers(self):
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        req_path = self.get_argument("path", "").strip()
+
+        # Default start path: prefer /sdcard on Android or ~/projects
+        if not req_path:
+            if os.path.exists('/sdcard'):
+                req_path = '/sdcard'
+            elif os.path.exists(os.path.join(USER_HOME, 'projects')):
+                req_path = os.path.join(USER_HOME, 'projects')
+            else:
+                req_path = USER_HOME
+
+        target_dir = os.path.abspath(os.path.expanduser(req_path))
+
+        if not is_path_allowed(target_dir):
+            target_dir = USER_HOME
+
+        if not os.path.exists(target_dir):
+            try:
+                os.makedirs(target_dir, exist_ok=True)
+            except Exception:
+                target_dir = USER_HOME
+
+        # Parent path
+        parent_path = os.path.dirname(target_dir)
+        if not is_path_allowed(parent_path) or parent_path == target_dir:
+            parent_path = None
+
+        # Build clean breadcrumbs
+        breadcrumbs = []
+        curr = target_dir
+        parts = []
+        while curr and curr != '/':
+            parts.append((os.path.basename(curr) or curr, curr))
+            p = os.path.dirname(curr)
+            if p == curr:
+                break
+            curr = p
+        if curr == '/':
+            parts.append(('/', '/'))
+        parts.reverse()
+
+        for name, p in parts:
+            b_name = name
+            if p == USER_HOME:
+                b_name = '~'
+            elif p in ['/sdcard', '/storage/emulated/0']:
+                b_name = '📱 حافظه گوشی'
+            breadcrumbs.append({"name": b_name, "path": p})
+
+        # List only subdirectories
+        subdirs = []
+        try:
+            with os.scandir(target_dir) as it:
+                for entry in it:
+                    if entry.is_dir() and not entry.name.startswith('.'):
+                        count = 0
+                        try:
+                            count = len([x for x in os.scandir(entry.path)])
+                        except Exception:
+                            count = 0
+                        try:
+                            mtime = entry.stat().st_mtime
+                        except Exception:
+                            mtime = 0
+                        subdirs.append({
+                            "name": entry.name,
+                            "path": entry.path,
+                            "item_count": count,
+                            "mtime": mtime
+                        })
+        except Exception as e:
+            logger.warning(f"Error scanning dir {target_dir}: {e}")
+
+        subdirs.sort(key=lambda x: x["name"].lower())
+
+        # Quick locations
+        quick_roots = []
+        if os.path.exists('/sdcard'):
+            quick_roots.append({"label": "📱 حافظه گوشی", "path": "/sdcard"})
+            if os.path.exists('/sdcard/Download'):
+                quick_roots.append({"label": "📥 دانلودها", "path": "/sdcard/Download"})
+            if os.path.exists('/sdcard/Documents'):
+                quick_roots.append({"label": "📄 اسناد", "path": "/sdcard/Documents"})
+
+        projects_dir = os.path.join(USER_HOME, 'projects')
+        quick_roots.append({"label": "📁 پروژه‌ها", "path": projects_dir})
+        quick_roots.append({"label": "🏠 Home (~)", "path": USER_HOME})
+
+        desktop_dir = os.path.join(USER_HOME, 'Desktop')
+        if os.path.exists(desktop_dir):
+            quick_roots.append({"label": "💻 Desktop", "path": desktop_dir})
+
+        downloads_dir = os.path.join(USER_HOME, 'Downloads')
+        if os.path.exists(downloads_dir) and not any(r["path"] == downloads_dir for r in quick_roots):
+            quick_roots.append({"label": "📥 دانلودها", "path": downloads_dir})
+
+        self.write(json.dumps({
+            "current_path": target_dir,
+            "parent_path": parent_path,
+            "breadcrumbs": breadcrumbs,
+            "subdirs": subdirs,
+            "quick_roots": quick_roots
+        }, ensure_ascii=False))
+
+class MakeDirectoryApiHandler(BaseApiHandler):
+    def set_default_headers(self):
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def post(self):
+        try:
+            body = json.loads(self.request.body.decode('utf-8'))
+        except Exception:
+            self.set_status(400)
+            self.write(json.dumps({"error": "Invalid JSON body"}))
+            return
+
+        parent_path = body.get("parent_path", "").strip()
+        folder_name = body.get("folder_name", "").strip()
+
+        if not parent_path or not folder_name:
+            self.set_status(400)
+            self.write(json.dumps({"error": "مسیر والد و نام پوشه الزامی است."}, ensure_ascii=False))
+            return
+
+        if '/' in folder_name or '\\' in folder_name or '..' in folder_name:
+            self.set_status(400)
+            self.write(json.dumps({"error": "نام پوشه نامعتبر است."}, ensure_ascii=False))
+            return
+
+        target_parent = os.path.abspath(os.path.expanduser(parent_path))
+        if not is_path_allowed(target_parent):
+            self.set_status(403)
+            self.write(json.dumps({"error": "دسترسی غیرمجاز برای ایجاد پوشه در این مسیر."}, ensure_ascii=False))
+            return
+
+        new_dir = os.path.join(target_parent, folder_name)
+        try:
+            os.makedirs(new_dir, exist_ok=True)
+            self.write(json.dumps({
+                "ok": True,
+                "path": new_dir,
+                "name": folder_name
+            }, ensure_ascii=False))
+        except Exception as e:
+            self.set_status(500)
+            self.write(json.dumps({"error": f"خطا در ایجاد پوشه: {str(e)}"}, ensure_ascii=False))
+
 # Feature 4: Built-in File Explorer, Code Viewer & In-App Editor Endpoints
 class FilesApiHandler(BaseApiHandler):
     def set_default_headers(self):
@@ -2267,17 +2914,16 @@ class ChatWebSocket(tornado.websocket.WebSocketHandler):
         connected_clients.add(self)
         active_id = history_mgr.data.get("active_chat_id")
         chat = history_mgr.get_chat(active_id) or {}
-        procs = get_system_processes()
 
         self.write_message(json.dumps({
             "type": "connected",
             "active_chat_id": active_id,
             "chat": chat,
-            "models": fetch_models_from_cli(),
+            "models": CACHED_MODELS,
             "effort": chat.get("effort") or history_mgr.data.get("default_effort", "high"),
             "mode": chat.get("mode") or history_mgr.data.get("default_mode", "auto"),
-            "processes_count": len(procs),
-            "internet_ok": is_internet_available(0.5)
+            "processes_count": len(managed_process_logs),
+            "internet_ok": True
         }, ensure_ascii=False))
 
     def on_close(self):
@@ -2461,7 +3107,10 @@ class ChatWebSocket(tornado.websocket.WebSocketHandler):
                 log_subscribers[pid].discard(self)
 
         elif msg_type == "ping":
-            self.write_message(json.dumps({"type": "pong", "time": time.time()}))
+            try:
+                self.write_message(json.dumps({"type": "pong", "time": time.time()}))
+            except Exception:
+                pass
 
 def make_app():
     return tornado.web.Application([
@@ -2476,13 +3125,18 @@ def make_app():
         # Antigravity Google Account & Quota Endpoints
         (r"/api/antigravity/account", AntigravityAccountApiHandler),
 
-        # Projects Endpoints
+        # Projects & Settings Endpoints
         (r"/api/projects", ProjectsApiHandler),
         (r"/api/projects/([^/]+)/switch", ProjectSwitchApiHandler),
         (r"/api/projects/([^/]+)", ProjectDetailApiHandler),
+        (r"/api/project-context", ProjectContextApiHandler),
+        (r"/api/settings", SettingsApiHandler),
+        (r"/api/fs/dirs", DirectoryBrowseApiHandler),
+        (r"/api/fs/mkdir", MakeDirectoryApiHandler),
 
         (r"/api/chats", ChatApiHandler),
         (r"/api/chats/(.*)", ChatApiHandler),
+        (r"/api/search-chats", SearchChatsApiHandler),
         (r"/api/models", ModelsApiHandler),
         (r"/api/workspace", WorkspaceApiHandler),
         (r"/api/mentions", MentionsApiHandler),
@@ -2516,9 +3170,12 @@ def make_app():
         (r"/icons/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(WORKSPACE_DIR, "icons")}),
     ],
     template_path=WORKSPACE_DIR,
+    compiled_template_cache=False,
     debug=False)
 
 if __name__ == "__main__":
+    import tornado.log
+    tornado.log.enable_pretty_logging()
     app = make_app()
     app.listen(PORT, address=HOST)
     print(f"🚀 Antigravity Server running at http://127.0.0.1:{PORT}")

@@ -1,9 +1,9 @@
 /**
- * Antigravity Mobile-First PWA Service Worker (v3.1.1)
+ * Antigravity Mobile-First PWA Service Worker (v3.2.0)
  * Network-First with offline fallback
  */
 
-const CACHE_NAME = 'antigravity-pwa-v3.1.1';
+const CACHE_NAME = 'antigravity-pwa-v3.2.0';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

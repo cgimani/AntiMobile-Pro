@@ -11,10 +11,17 @@
   let ws = null;
   let activeChatId = null;
   let chats = {};
-  let currentModel = 'gemini-3.8-flash-high';
+  let currentModel = 'gemini-3.8-flash-medium';
   let currentEffort = 'high';
   let currentMode = 'auto';
-  let availableModels = [];
+  let availableModels = [
+    { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash (Medium)' },
+    { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)' },
+    { id: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)' },
+    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (Thinking)' },
+    { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)' },
+    { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)' }
+  ];
   let workspaceDir = '~';
   let isWsConnected = false;
   let isInternetOnline = navigator.onLine !== false;
@@ -24,7 +31,7 @@
   // Auth State
   let authToken = localStorage.getItem('anti_auth_token') || sessionStorage.getItem('anti_auth_token') || null;
   let currentUser = localStorage.getItem('anti_username') || sessionStorage.getItem('anti_username') || 'admin';
-  let isAuthenticated = false;
+  let isAuthenticated = true;
 
   // Active Turn Steps, Thinking & Timers
   let currentAccordionEl = null;
@@ -253,12 +260,18 @@
     };
 
     renderer.link = function (href, title, text) {
-      if (href && href.startsWith('file://')) {
-        const filePath = href.replace('file://', '');
+      if (typeof href === 'object' && href !== null) {
+        text = href.text || (href.tokens && href.tokens.map(t => t.text || '').join('')) || '';
+        title = href.title || '';
+        href = href.href || '';
+      }
+      const hrefStr = String(href || '');
+      if (hrefStr.startsWith('file://')) {
+        const filePath = hrefStr.replace('file://', '');
         const fName = filePath.split('/').pop();
         return `<a href="#" class="file-mention-link" data-path="${filePath}" onclick="window.handleFileLinkClick(event, this)">📄 ${text || fName}</a>`;
       }
-      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+      return `<a href="${hrefStr}" target="_blank" rel="noopener noreferrer">${text || hrefStr}</a>`;
     };
 
     marked.setOptions({
@@ -328,7 +341,7 @@
   // Auto-scroll chat area
   function scrollToBottom(force = false) {
     if (!chatScrollArea) return;
-    const isNearBottom = chatScrollArea.scrollHeight - chatScrollArea.scrollTop - chatScrollArea.clientHeight < 160;
+    const isNearBottom = chatScrollArea.scrollHeight - chatScrollArea.scrollTop - chatScrollArea.clientHeight < 350;
     if (force || isNearBottom) {
       chatScrollArea.scrollTop = chatScrollArea.scrollHeight;
     }
@@ -676,41 +689,34 @@
     }
   }
 
-  // Create Antigravity Thinking Accordion Element
+  // Create Antigravity 2.0 Minimal Thinking Accordion Element
   function createThinkingAccordion(thinkingText, duration, tokens, isLive = false) {
-    const accordion = document.createElement('div');
-    accordion.className = `thinking-accordion ${isLive ? 'expanded pulse-active' : ''}`;
+    const card = document.createElement('div');
+    card.className = `agy-thinking-card ${isLive ? 'active expanded' : ''}`;
     
-    let durStr = '';
-    if (duration) durStr = `${duration}s`;
-    else if (isLive) durStr = 'در حال تحلیل...';
-    
-    const tokStr = tokens ? ` • ${tokens} توکن` : '';
+    let durStr = duration ? `${duration}s` : (isLive ? '0.0s' : '');
+    const tokStr = tokens ? ` • ${tokens} tokens` : '';
     const badgeText = `${durStr}${tokStr}`;
+    const titleText = isLive ? 'Thinking...' : 'Thought';
 
-    accordion.innerHTML = `
-      <div class="thinking-header">
-        <div class="thinking-title-wrap">
-          <span class="thinking-icon">${isLive ? '🧠' : '💡'}</span>
-          <span>${isLive ? 'در حال تفکر و پردازش...' : 'فرایند تفکر ایجنت (Thinking Process)'}</span>
+    card.innerHTML = `
+      <div class="agy-thinking-header">
+        <div class="agy-thinking-title">
+          <span>🧠</span>
+          <span class="thinking-title-label">${titleText}</span>
         </div>
-        <div class="thinking-meta-wrap">
-          <span class="thinking-badge">${badgeText}</span>
-          <svg class="thinking-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </div>
+        <span class="agy-thinking-time">${badgeText}</span>
       </div>
-      <div class="thinking-body">${escapeHtml(thinkingText || '')}</div>
+      <div class="agy-thinking-body">${escapeHtml(thinkingText || '')}</div>
     `;
 
-    const header = accordion.querySelector('.thinking-header');
+    const header = card.querySelector('.agy-thinking-header');
     header.addEventListener('click', () => {
       triggerHaptic(10);
-      accordion.classList.toggle('expanded');
+      card.classList.toggle('expanded');
     });
 
-    return accordion;
+    return card;
   }
 
   // Create Antigravity Action Steps Accordion
@@ -778,18 +784,17 @@
   // =========================================================================
   function renderMessages() {
     if (!chatInner) return;
-    chatInner.innerHTML = '';
     currentAccordionEl = null;
     currentMiniTerminals = {};
     activeTurnStepIndices.clear();
 
     const chat = chats[activeChatId];
     if (!chat || !chat.messages || chat.messages.length === 0) {
-      if (emptyState) emptyState.style.display = 'flex';
+      chatInner.innerHTML = '';
       return;
     }
 
-    if (emptyState) emptyState.style.display = 'none';
+    chatInner.innerHTML = '';
 
     chat.messages.forEach(msg => {
       appendMessageBubble(msg.role, msg.content, msg.timestamp, false, false, msg.meta);
@@ -824,29 +829,51 @@
 
       row.appendChild(bubble);
     } else {
-      // 1. Assistant Header
-      const header = document.createElement('div');
-      header.className = 'assistant-header';
-      header.innerHTML = `
-        <div class="assistant-avatar">⚡</div>
-        <span class="assistant-name">Antigravity</span>
-        <span class="msg-meta" style="margin-right:auto;">${formatTimestamp(timestamp || Date.now() / 1000)}</span>
-      `;
-      row.appendChild(header);
+      row.className = 'msg-row assistant minimal-turn';
 
-      // 2. Thinking Accordion (if meta.thinking exists)
-      if (meta && meta.thinking) {
-        const thinkEl = createThinkingAccordion(meta.thinking, meta.duration, meta.thinking_tokens);
-        row.appendChild(thinkEl);
+      // Antigravity 2.0 Live Feed (if meta has thinking or steps)
+      if (meta && (meta.thinking || (meta.steps && meta.steps.length > 0))) {
+        const feed = document.createElement('div');
+        feed.className = 'agy-live-feed';
+
+        if (meta.thinking) {
+          const thinkItem = document.createElement('div');
+          thinkItem.className = 'agy-feed-item thinking';
+          const dur = meta.duration ? `${Math.round(meta.duration)}s` : '30s';
+          thinkItem.innerHTML = `
+            <div class="agy-feed-header">
+              <span class="agy-feed-label">Thought for ${dur}</span>
+              <span class="agy-feed-chevron">›</span>
+            </div>
+            <div class="agy-feed-body">${escapeHtml(meta.thinking)}</div>
+          `;
+          thinkItem.querySelector('.agy-feed-header').addEventListener('click', () => {
+            triggerHaptic(10);
+            thinkItem.classList.toggle('expanded');
+          });
+          feed.appendChild(thinkItem);
+        }
+
+        if (meta.steps && Array.isArray(meta.steps)) {
+          meta.steps.forEach(st => {
+            const item = document.createElement('div');
+            item.className = `agy-feed-item ${(st.action || st.feed_type || 'tool').toLowerCase()}`;
+            item._stepData = st;
+            item.innerHTML = buildFeedItemHeaderHtml(st);
+            const body = item.querySelector('.agy-feed-body');
+            renderFeedPreview(body, st);
+            item.querySelector('.agy-feed-header').addEventListener('click', () => {
+              triggerHaptic(10);
+              item.classList.toggle('expanded');
+            });
+            feed.appendChild(item);
+          });
+        }
+
+        row.appendChild(feed);
       }
 
-      // 3. Actions / Steps Accordion (if meta.steps exists and has items)
-      if (meta && meta.steps && meta.steps.length > 0) {
-        const stepsEl = createStepsAccordion(meta.steps);
-        row.appendChild(stepsEl);
-      }
-
-      // 4. Message Bubble Body
+      // Message Bubble Body (Pure Typography on pitch-black background)
       const bubble = document.createElement('div');
       bubble.className = 'bubble ai-bubble';
       bubble.setAttribute('dir', 'auto');
@@ -937,138 +964,306 @@
     return currentAccordionEl;
   }
 
-  function handleStepStart(data) {
-    const accordion = getOrCreateAccordion();
-    const content = accordion.querySelector('.accordion-content');
-    const titleEl = accordion.querySelector('.accordion-title');
-    const iconEl = accordion.querySelector('.accordion-icon');
+    // =========================================================================
+  // Antigravity 2.0 Minimalist Live Feed Handlers (Exact match to reference)
+  // =========================================================================
+  let currentLiveFeedEl = null;
+  let currentFeedStatusEl = null;
+  let lastTurnThinkingText = '';
 
-    if (titleEl && data.title) titleEl.textContent = data.title;
-    if (iconEl && data.icon) iconEl.textContent = data.icon;
+  // File Badges for Antigravity 2.0 Feed Items (Image 7)
+  function getFileBadge(ext) {
+    const e = (ext || '').toLowerCase().replace(/^\./, '');
+    if (e === 'tsx' || e === 'jsx') {
+      return { text: '⚛', cls: 'icon-react' };
+    }
+    if (e === 'ts') {
+      return { text: 'TS', cls: 'icon-ts' };
+    }
+    if (e === 'js') {
+      return { text: 'JS', cls: 'icon-js' };
+    }
+    if (e === 'py') {
+      return { text: 'PY', cls: 'icon-py' };
+    }
+    if (['html', 'xml', 'svg'].includes(e)) {
+      return { text: '</>', cls: 'icon-html' };
+    }
+    if (['css', 'scss', 'sass', 'less'].includes(e)) {
+      return { text: '{}', cls: 'icon-css' };
+    }
+    if (e === 'json') {
+      return { text: '{}', cls: 'icon-json' };
+    }
+    if (['md', 'txt'].includes(e)) {
+      return { text: 'MD', cls: 'icon-md' };
+    }
+    if (['sh', 'bash', 'zsh'].includes(e)) {
+      return { text: '$_', cls: 'icon-sh' };
+    }
+    return { text: '{}', cls: 'icon-code' };
+  }
 
-    const stepIndex = data.step_index;
-    activeTurnStepIndices.add(stepIndex);
+  function buildFeedItemHeaderHtml(data) {
+    const action = data.action || (data.feed_type === 'edit' ? 'Edited' : (data.feed_type === 'create' ? 'Created' : (data.feed_type === 'read' ? 'Analyzed' : 'Ran')));
+    const fname = data.file_name || 'file';
+    const badge = getFileBadge(data.file_ext);
 
-    let stepItem = content.querySelector(`[data-step="${stepIndex}"]`);
-    if (!stepItem) {
-      stepItem = document.createElement('div');
-      stepItem.className = 'step-item';
-      stepItem.setAttribute('data-step', stepIndex);
+    if (action === 'Analyzed') {
+      const lineRange = data.line_range ? `<span class="agy-feed-linerange">${escapeHtml(data.line_range)}</span>` : '';
+      return `
+        <div class="agy-feed-header">
+          <span class="agy-feed-verb">Analyzed</span>
+          <span class="agy-feed-badge ${badge.cls}">${badge.text}</span>
+          <span class="agy-feed-filename">${escapeHtml(fname)}</span>
+          ${lineRange}
+          <span class="agy-feed-chevron">›</span>
+        </div>
+        <div class="agy-feed-body"></div>
+      `;
+    }
 
-      stepItem.innerHTML = `
-        <div class="step-row">
-          <div class="step-title-wrap">
-            <span class="step-status-icon active">
-              <span class="spinner-icon"></span>
-            </span>
-            <span class="step-text">${data.icon || '•'} ${data.title || data.tool_name}</span>
+    if (action === 'Created') {
+      return `
+        <div class="agy-feed-header">
+          <span class="agy-feed-verb">Created</span>
+          <span class="agy-feed-badge ${badge.cls}">${badge.text}</span>
+          <span class="agy-feed-filename">${escapeHtml(fname)}</span>
+          <span class="agy-feed-diff-add">+${data.add_lines || 0}</span>
+          <span class="agy-feed-diff-del">-0</span>
+          <span class="agy-feed-chevron">›</span>
+        </div>
+        <div class="agy-feed-body"></div>
+      `;
+    }
+
+    if (action === 'Edited') {
+      return `
+        <div class="agy-feed-header">
+          <span class="agy-feed-verb">Edited</span>
+          <span class="agy-feed-badge ${badge.cls}">${badge.text}</span>
+          <span class="agy-feed-filename">${escapeHtml(fname)}</span>
+          <span class="agy-feed-diff-add">+${data.add_lines || 0}</span>
+          <span class="agy-feed-diff-del">-${data.del_lines || 0}</span>
+          <span class="agy-feed-chevron">›</span>
+        </div>
+        <div class="agy-feed-body"></div>
+      `;
+    }
+
+    // Default: Ran <command / summary>
+    const labelText = data.feed_label || data.command || data.title || data.tool_name || 'terminal command';
+    return `
+      <div class="agy-feed-header">
+        <span class="agy-feed-verb">Ran</span>
+        <span class="agy-feed-cmd">${escapeHtml(labelText)}</span>
+        <span class="agy-feed-chevron">›</span>
+      </div>
+      <div class="agy-feed-body"></div>
+    `;
+  }
+
+  function renderFeedPreview(body, data) {
+    if (!body || !data) return;
+
+    // 1. Edit / Diff Preview
+    if (data.action === 'Edited' || data.feed_type === 'edit') {
+      const target = data.target || '';
+      const replacement = data.replacement || '';
+      const fname = data.file_name || 'file';
+      const addCount = data.add_lines || 0;
+      const delCount = data.del_lines || 0;
+
+      let diffHtml = `
+        <div class="agy-preview-diff">
+          <div class="agy-diff-header">
+            <span class="agy-diff-file">${escapeHtml(fname)}</span>
+            <span class="agy-diff-stats"><span class="add">+${addCount}</span> <span class="del">-${delCount}</span></span>
           </div>
-          <span class="step-duration" id="stepTimer_${stepIndex}">0.0s</span>
+          <div class="agy-diff-content">
+      `;
+      if (target) {
+        target.split('\n').forEach(line => {
+          diffHtml += `<div class="agy-diff-line del"><span class="marker">-</span><span class="code">${escapeHtml(line)}</span></div>`;
+        });
+      }
+      if (replacement) {
+        replacement.split('\n').forEach(line => {
+          diffHtml += `<div class="agy-diff-line add"><span class="marker">+</span><span class="code">${escapeHtml(line)}</span></div>`;
+        });
+      }
+      if (!target && !replacement && data.output) {
+        diffHtml += `<div class="agy-diff-line"><span class="code">${escapeHtml(data.output)}</span></div>`;
+      }
+      diffHtml += `</div></div>`;
+      body.innerHTML = diffHtml;
+      return;
+    }
+
+    // 2. Created File Preview
+    if (data.action === 'Created' || data.feed_type === 'create') {
+      const fname = data.file_name || 'file';
+      const snip = data.snippet || data.replacement || data.output || '';
+      const addCount = data.add_lines || (snip ? snip.split('\n').length : 0);
+      let createHtml = `
+        <div class="agy-preview-diff">
+          <div class="agy-diff-header">
+            <span class="agy-diff-file">${escapeHtml(fname)}</span>
+            <span class="agy-diff-stats"><span class="add">+${addCount}</span> <span class="del">-0</span></span>
+          </div>
+          <div class="agy-diff-content">
+      `;
+      if (snip) {
+        snip.split('\n').forEach(line => {
+          createHtml += `<div class="agy-diff-line add"><span class="marker">+</span><span class="code">${escapeHtml(line)}</span></div>`;
+        });
+      }
+      createHtml += `</div></div>`;
+      body.innerHTML = createHtml;
+      return;
+    }
+
+    // 3. File Read / Analyzed Snippet Preview
+    if (data.action === 'Analyzed' || data.feed_type === 'read' || data.snippet || data.tool_name === 'read_file' || data.tool_name === 'view_file') {
+      const fname = data.file_name || 'file';
+      const range = data.line_range || (data.start_line ? `line ${data.start_line}` : 'file');
+      const snip = data.snippet || data.output || '';
+      body.innerHTML = `
+        <div class="agy-preview-code">
+          <div class="agy-code-header">
+            <span class="agy-code-file">${escapeHtml(fname)}</span>
+            <span class="agy-code-range">${escapeHtml(range)}</span>
+          </div>
+          <pre class="agy-code-content">${escapeHtml(snip)}</pre>
         </div>
       `;
-      content.appendChild(stepItem);
+      return;
     }
 
-    // Live Command Execution Preview Box (Feature 1.3)
-    if (data.is_command && data.command) {
-      let miniTerm = stepItem.querySelector('.mini-terminal');
-      if (!miniTerm) {
-        miniTerm = document.createElement('div');
-        miniTerm.className = 'mini-terminal';
-        miniTerm.innerHTML = `
-          <div class="mini-terminal-header">
-            <span class="mini-terminal-cmd">$ ${data.command}</span>
-            <button class="mini-terminal-kill-btn" data-step="${stepIndex}">⏹ توقف (Kill)</button>
+    // 4. Command Preview
+    if (data.action === 'Ran' || data.is_command || data.tool_name === 'run_command' || data.command) {
+      const cmd = data.command || data.feed_label || 'command';
+      const out = data.output || body.textContent || 'Running...';
+      const dur = data.duration ? `${data.duration}s` : '';
+      body.innerHTML = `
+        <div class="agy-preview-terminal">
+          <div class="agy-terminal-header">
+            <span class="agy-terminal-cmd">$ ${escapeHtml(cmd)}</span>
+            ${dur ? `<span class="agy-terminal-badge">${dur}</span>` : ''}
           </div>
-          <div class="mini-terminal-body" id="termBody_${stepIndex}"></div>
-          <div class="mini-terminal-footer">
-            <span class="terminal-status">در حال اجرا...</span>
-            <span class="terminal-timer" id="termTimer_${stepIndex}">0.0s</span>
-          </div>
-        `;
+          <pre class="agy-terminal-output">${escapeHtml(out)}</pre>
+        </div>
+      `;
+      return;
+    }
 
-        // Kill Button Handler
-        const killBtn = miniTerm.querySelector('.mini-terminal-kill-btn');
-        killBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          killCommand(stepIndex);
-        });
+    // 5. Default / Output
+    if (data.output) {
+      body.innerHTML = `<pre class="agy-feed-generic-output">${escapeHtml(data.output)}</pre>`;
+    }
+  }
 
-        stepItem.appendChild(miniTerm);
+  function handleStepStart(data) {
+    if (!currentLiveFeedEl) return;
+    const stepIndex = data.step_index;
+    let item = currentLiveFeedEl.querySelector(`[data-step="${stepIndex}"]`);
+    if (!item) {
+      item = document.createElement('div');
+      item.setAttribute('data-step', stepIndex);
+      item._stepData = Object.assign({}, data);
+      const actionCls = (data.action || data.feed_type || 'tool').toLowerCase();
+      item.className = `agy-feed-item ${actionCls}`;
+      item.innerHTML = buildFeedItemHeaderHtml(data);
 
-        // Start elapsed timer
-        const startTime = Date.now();
-        const timerInterval = setInterval(() => {
-          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-          const tTimer = document.getElementById(`termTimer_${stepIndex}`);
-          const sTimer = document.getElementById(`stepTimer_${stepIndex}`);
-          if (tTimer) tTimer.textContent = `${elapsed}s`;
-          if (sTimer) sTimer.textContent = `${elapsed}s`;
-        }, 100);
+      const body = item.querySelector('.agy-feed-body');
+      renderFeedPreview(body, item._stepData);
 
-        currentMiniTerminals[stepIndex] = {
-          element: miniTerm,
-          timerInterval: timerInterval,
-          startTime: startTime
-        };
+      item.querySelector('.agy-feed-header').addEventListener('click', () => {
+        triggerHaptic(10);
+        item.classList.toggle('expanded');
+      });
+
+      if (currentFeedStatusEl && currentFeedStatusEl.parentNode === currentLiveFeedEl) {
+        currentLiveFeedEl.insertBefore(item, currentFeedStatusEl);
+      } else {
+        currentLiveFeedEl.appendChild(item);
       }
+    } else {
+      item._stepData = Object.assign(item._stepData || {}, data);
+      const body = item.querySelector('.agy-feed-body');
+      renderFeedPreview(body, item._stepData);
     }
-
     scrollToBottom();
   }
 
   function handleCommandOutput(data) {
+    if (!currentLiveFeedEl) return;
     const stepIndex = data.step_index;
-    const bodyEl = document.getElementById(`termBody_${stepIndex}`);
-    if (bodyEl) {
-      const lineSpan = document.createElement('div');
-      lineSpan.textContent = data.line;
-      if (data.is_err) lineSpan.style.color = '#f87171';
-      bodyEl.appendChild(lineSpan);
-      bodyEl.scrollTop = bodyEl.scrollHeight;
-      scrollToBottom();
+    const item = currentLiveFeedEl.querySelector(`[data-step="${stepIndex}"]`);
+    if (item) {
+      if (!item._stepData) item._stepData = {};
+      item._stepData.output = (item._stepData.output ? item._stepData.output + '\n' : '') + data.line;
+      const body = item.querySelector('.agy-feed-body');
+      if (body) {
+        const outPre = body.querySelector('.agy-terminal-output');
+        if (outPre) {
+          outPre.textContent = item._stepData.output;
+        } else {
+          renderFeedPreview(body, item._stepData);
+        }
+      }
     }
   }
 
   function handleStepDone(data) {
+    if (!currentLiveFeedEl) return;
     const stepIndex = data.step_index;
-    const accordion = currentAccordionEl;
-    if (accordion) {
-      const stepItem = accordion.querySelector(`[data-step="${stepIndex}"]`);
-      if (stepItem) {
-        const iconContainer = stepItem.querySelector('.step-status-icon');
-        if (iconContainer) {
-          iconContainer.className = 'step-status-icon';
-          iconContainer.textContent = '✓';
-        }
-        const sTimer = document.getElementById(`stepTimer_${stepIndex}`);
-        if (sTimer && data.duration !== undefined) {
-          sTimer.textContent = `${data.duration}s`;
-        }
-      }
+    let item = currentLiveFeedEl.querySelector(`[data-step="${stepIndex}"]`);
+    if (!item) {
+      handleStepStart(data);
+      item = currentLiveFeedEl.querySelector(`[data-step="${stepIndex}"]`);
     }
+    if (item) {
+      item._stepData = Object.assign(item._stepData || {}, data);
+      item.innerHTML = buildFeedItemHeaderHtml(item._stepData);
+      const body = item.querySelector('.agy-feed-body');
+      if (body) {
+        renderFeedPreview(body, item._stepData);
+      }
+      item.querySelector('.agy-feed-header').addEventListener('click', () => {
+        triggerHaptic(10);
+        item.classList.toggle('expanded');
+      });
+    }
+    scrollToBottom();
+  }
 
-    // Stop timer and update mini terminal
-    if (currentMiniTerminals[stepIndex]) {
-      clearInterval(currentMiniTerminals[stepIndex].timerInterval);
-      const miniTerm = currentMiniTerminals[stepIndex].element;
-      if (miniTerm) {
-        const statusEl = miniTerm.querySelector('.terminal-status');
-        if (statusEl) statusEl.textContent = 'تکمیل شد';
-        const killBtn = miniTerm.querySelector('.mini-terminal-kill-btn');
-        if (killBtn) {
-          killBtn.disabled = true;
-          killBtn.style.opacity = '0.4';
-          killBtn.style.cursor = 'default';
-        }
-        // If body is empty, inject final output
-        const bodyEl = document.getElementById(`termBody_${stepIndex}`);
-        if (bodyEl && !bodyEl.textContent.trim() && data.output) {
-          bodyEl.textContent = data.output;
-        }
-      }
-      delete currentMiniTerminals[stepIndex];
+  function handleThinkingStep(data) {
+    if (!currentLiveFeedEl) return;
+    const dur = Math.round(data.duration || 1);
+    const item = document.createElement('div');
+    item.className = 'agy-feed-item thinking';
+    const thText = data.thinking || lastTurnThinkingText || '';
+    item.innerHTML = `
+      <div class="agy-feed-header">
+        <span class="agy-feed-verb">Thought for ${dur}s</span>
+        <span class="agy-feed-chevron">›</span>
+      </div>
+      <div class="agy-feed-body">
+        <div class="agy-preview-thought">${escapeHtml(thText || 'Reasoning analysis completed.')}</div>
+      </div>
+    `;
+    item.querySelector('.agy-feed-header').addEventListener('click', () => {
+      triggerHaptic(10);
+      item.classList.toggle('expanded');
+    });
+
+    if (currentFeedStatusEl && currentFeedStatusEl.parentNode === currentLiveFeedEl) {
+      currentLiveFeedEl.insertBefore(item, currentFeedStatusEl);
+    } else {
+      currentLiveFeedEl.appendChild(item);
     }
+    scrollToBottom();
   }
 
   // Kill Command via WebSocket
@@ -1880,60 +2075,646 @@
   }
 
   // =========================================================================
-  // Drawer / History Management
+  // Antigravity 2.0 Sidebar Projects Tree & Real Workspace Chats (Image 1)
   // =========================================================================
-  function updateDrawerChatList() {
-    if (!chatsList) return;
-    chatsList.innerHTML = '';
+  const expandedProjectFolders = new Set();
+  let cachedProjectsData = null;
 
-    const chatKeys = Object.keys(chats).sort((a, b) => (chats[b].updated_at || 0) - (chats[a].updated_at || 0));
+  async function updateDrawerChatList() {
+    const projectsContainer = document.getElementById('sidebarProjectsTree');
+    const standaloneContainer = document.getElementById('sidebarStandaloneChats');
 
-    chatKeys.forEach(cid => {
-      const c = chats[cid];
-      const item = document.createElement('div');
-      item.className = `chat-item ${cid === activeChatId ? 'active' : ''}`;
+    try {
+      const res = await fetch('/api/projects');
+      if (!res.ok) return;
+      const data = await res.json();
+      cachedProjectsData = data;
 
-      const info = document.createElement('div');
-      info.className = 'chat-item-info';
-      info.onclick = () => switchChat(cid);
+      if (data.active_project_id) {
+        activeProjectId = data.active_project_id;
+        expandedProjectFolders.add(data.active_project_id);
+      }
 
-      const title = document.createElement('div');
-      title.className = 'chat-item-title';
-      title.textContent = c.title || 'گفتگوی جدید';
+      // Update User profile in sidebar and settings
+      if (data.user) {
+        const nameEl = document.getElementById('sidebarUserName');
+        const emailEl = document.getElementById('sidebarUserEmail');
+        const avatarEl = document.getElementById('userAvatarText');
+        if (nameEl) nameEl.textContent = data.user.name || 'Mani Khalili';
+        if (emailEl) emailEl.textContent = data.user.email || 'mani.khalili1379@gmail.com';
+        if (avatarEl) avatarEl.textContent = data.user.avatar || 'M';
 
-      const meta = document.createElement('div');
-      meta.className = 'chat-item-meta';
-      meta.textContent = `${c.messages ? c.messages.length : 0} پیام • ${formatTimestamp(c.updated_at)}`;
+        const sName = document.getElementById('settingsUserName');
+        const sEmail = document.getElementById('settingsUserEmail');
+        const sAvatar = document.getElementById('settingsUserAvatar');
+        if (sName) sName.textContent = data.user.name || 'Mani Khalili';
+        if (sEmail) sEmail.textContent = (data.user.email || 'mani.khalili1379@gmail.com').substring(0, 18) + '...';
+        if (sAvatar) sAvatar.textContent = data.user.avatar || 'M';
+      }
 
-      info.appendChild(title);
-      info.appendChild(meta);
+      // Populate Projects Tree with Real User Projects
+      renderDrawerProjectsTree(data.projects);
 
-      const delBtn = document.createElement('button');
-      delBtn.className = 'chat-item-delete';
-      delBtn.title = 'حذف گفتگو';
-      delBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        </svg>
-      `;
-      delBtn.onclick = (e) => {
-        e.stopPropagation();
-        deleteChat(cid);
-      };
+      // Populate Standalone Chats
+      if (standaloneContainer) {
+        standaloneContainer.innerHTML = '';
+        if (Array.isArray(data.standalone_chats) && data.standalone_chats.length > 0) {
+          data.standalone_chats.forEach(c => {
+            const item = document.createElement('div');
+            item.className = `agy-chat-item ${c.id === activeChatId ? 'active' : ''}`;
+            item.onclick = () => {
+              switchChat(c.id);
+              closeDrawer();
+            };
 
-      item.appendChild(info);
-      item.appendChild(delBtn);
-      chatsList.appendChild(item);
-    });
+            const titleEl = document.createElement('span');
+            titleEl.className = 'agy-chat-title';
+            titleEl.textContent = c.title || 'Conversation';
+            item.appendChild(titleEl);
 
-    if (drawerChatCount) {
-      drawerChatCount.textContent = `${chatKeys.length} گفتگو`;
+            const timeEl = document.createElement('span');
+            timeEl.className = 'agy-chat-time';
+            timeEl.textContent = c.time_str || '';
+            item.appendChild(timeEl);
+
+            standaloneContainer.appendChild(item);
+          });
+        }
+      }
+
+    } catch (e) {
+      console.warn('[Drawer] Error loading projects tree:', e);
     }
   }
 
-  function switchChat(chatId) {
-    if (activeChatId === chatId && chats[chatId]) {
+  function renderDrawerProjectsTree(projectsList, filterQuery = '') {
+    const projectsContainer = document.getElementById('sidebarProjectsTree');
+    if (!projectsContainer || !Array.isArray(projectsList)) return;
+    projectsContainer.innerHTML = '';
+
+    const q = (filterQuery || '').toLowerCase().trim();
+
+    projectsList.forEach(p => {
+      const isFiltered = q.length > 0;
+      let matchedChats = p.chats || [];
+      if (isFiltered) {
+        const pNameMatch = (p.name || '').toLowerCase().includes(q);
+        if (!pNameMatch) {
+          matchedChats = matchedChats.filter(c => (c.title || '').toLowerCase().includes(q));
+          if (matchedChats.length === 0) return;
+        }
+      }
+
+      const isProjectActive = (p.id === activeProjectId);
+      const isOpen = isFiltered || expandedProjectFolders.has(p.id) || isProjectActive;
+      const folder = document.createElement('div');
+      folder.className = `agy-project-folder ${isOpen ? 'open' : ''} ${isProjectActive ? 'active-project' : ''}`;
+      folder.setAttribute('data-proj-id', p.id);
+
+      const header = document.createElement('div');
+      header.className = 'agy-project-header';
+      header.innerHTML = `
+        <div class="agy-project-header-left">
+          <div class="agy-project-title-row">
+            <span>📁</span>
+            <span class="agy-project-name">${escapeHtml(p.name)}</span>
+          </div>
+          ${p.path ? `<span class="agy-project-path-sub">${escapeHtml(p.path)}</span>` : ''}
+        </div>
+        <div class="agy-project-header-right">
+          <span class="agy-project-count-badge">${matchedChats.length}</span>
+          <button class="agy-project-add-btn" title="گفتگوی جدید در این پروژه" onclick="window.createNewChatInProject(event, '${escapeHtml(p.id)}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <svg class="agy-project-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </div>
+      `;
+
+      header.onclick = async (e) => {
+        if (e.target.closest('.agy-project-add-btn')) return;
+        if (folder.classList.contains('open')) {
+          folder.classList.remove('open');
+          expandedProjectFolders.delete(p.id);
+        } else {
+          folder.classList.add('open');
+          expandedProjectFolders.add(p.id);
+          if (p.id !== activeProjectId) {
+            await switchProject(p.id);
+          }
+        }
+      };
+      folder.appendChild(header);
+
+      const folderChatsList = document.createElement('div');
+      folderChatsList.className = 'agy-project-chats';
+
+      if (matchedChats && matchedChats.length > 0) {
+        matchedChats.forEach(c => {
+          const isChatActive = (c.id === activeChatId);
+          const item = document.createElement('div');
+          item.className = `agy-chat-item ${isChatActive ? 'active' : ''}`;
+          item.onclick = async (e) => {
+            e.stopPropagation();
+            if (p.id !== activeProjectId) {
+              await authFetch(`/api/projects/${p.id}/switch`, { method: 'POST' });
+              activeProjectId = p.id;
+            }
+            switchChat(c.id);
+            closeDrawer();
+          };
+
+          const titleEl = document.createElement('span');
+          titleEl.className = 'agy-chat-title';
+          titleEl.textContent = c.title || 'Untitled Conversation';
+          item.appendChild(titleEl);
+
+          const rightWrap = document.createElement('div');
+          rightWrap.className = 'agy-chat-item-right';
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'agy-chat-delete-btn';
+          delBtn.title = 'حذف این گفتگو';
+          delBtn.innerHTML = '✕';
+          delBtn.onclick = (e) => {
+            e.stopPropagation();
+            handleDeleteChat(e, c.id);
+          };
+          rightWrap.appendChild(delBtn);
+
+          if (isChatActive) {
+            const timeEl = document.createElement('span');
+            timeEl.className = 'agy-chat-time';
+            timeEl.textContent = c.time_str || 'now';
+            rightWrap.appendChild(timeEl);
+          } else {
+            const dot = document.createElement('span');
+            dot.className = 'agy-chat-dot';
+            rightWrap.appendChild(dot);
+          }
+
+          item.appendChild(rightWrap);
+          folderChatsList.appendChild(item);
+        });
+      } else {
+        const empty = document.createElement('div');
+        empty.className = 'agy-empty-chats';
+        empty.textContent = 'No conversations yet';
+        folderChatsList.appendChild(empty);
+      }
+
+      folder.appendChild(folderChatsList);
+      projectsContainer.appendChild(folder);
+    });
+  }
+
+  function filterDrawerProjects(query) {
+    if (cachedProjectsData && cachedProjectsData.projects) {
+      renderDrawerProjectsTree(cachedProjectsData.projects, query);
+    }
+  }
+
+  let isProjectFilterVisible = false;
+  function toggleProjectFilter() {
+    const input = document.getElementById('projectFilterInput');
+    if (!input) return;
+    isProjectFilterVisible = !isProjectFilterVisible;
+    input.style.display = isProjectFilterVisible ? 'block' : 'none';
+    if (isProjectFilterVisible) {
+      input.focus();
+    } else {
+      input.value = '';
+      filterDrawerProjects('');
+    }
+  }
+
+  // Device Storage Browser & Folder Picker
+  let fpCurrentDirectory = '';
+  let fpParentDirectory = null;
+
+  async function promptNewProject() {
+    closeDrawer();
+    closeSettingsModal();
+    const modal = document.getElementById('folderPickerModal');
+    if (modal) {
+      modal.classList.add('open');
+      toggleFpMkdir(false);
+      await loadFpDirectory(fpCurrentDirectory || '');
+    }
+  }
+
+  function closeFolderPickerModal() {
+    const modal = document.getElementById('folderPickerModal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  async function loadFpDirectory(path) {
+    const dirListEl = document.getElementById('fpDirList');
+    const pathDisplay = document.getElementById('fpCurrentPathDisplay');
+    const crumbsEl = document.getElementById('fpBreadcrumbs');
+    const rootsEl = document.getElementById('fpQuickRoots');
+    const btnParent = document.getElementById('fpBtnParent');
+
+    if (dirListEl) dirListEl.innerHTML = '<div class="agy-fp-loading">در حال خواندن پوشه‌های حافظه...</div>';
+
+    try {
+      const url = path ? `/api/fs/dirs?path=${encodeURIComponent(path)}` : '/api/fs/dirs';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to load directory');
+      const data = await res.json();
+
+      fpCurrentDirectory = data.current_path;
+      fpParentDirectory = data.parent_path;
+
+      if (pathDisplay) pathDisplay.textContent = fpCurrentDirectory;
+
+      // Auto-suggest project name if empty
+      const nameIn = document.getElementById('fpProjectName');
+      if (nameIn && !nameIn.value.trim()) {
+        const parts = fpCurrentDirectory.split('/').filter(Boolean);
+        const folderName = parts.pop() || 'Project';
+        if (folderName !== 'projects' && folderName !== 'sdcard') {
+          nameIn.value = folderName;
+        }
+      }
+
+      // Render Parent Button state
+      if (btnParent) {
+        btnParent.disabled = !fpParentDirectory;
+      }
+
+      // Render Quick Roots
+      if (rootsEl && data.quick_roots) {
+        rootsEl.innerHTML = data.quick_roots.map(r => {
+          const isAct = r.path === fpCurrentDirectory;
+          return `<button type="button" class="agy-fp-root-chip ${isAct ? 'active' : ''}" onclick="window.navigateFpDir('${escapeHtml(r.path)}')">${escapeHtml(r.label)}</button>`;
+        }).join('');
+      }
+
+      // Render Breadcrumbs
+      if (crumbsEl && data.breadcrumbs) {
+        crumbsEl.innerHTML = data.breadcrumbs.map((b, idx) => {
+          const isLast = idx === data.breadcrumbs.length - 1;
+          return `
+            <span class="agy-fp-crumb ${isLast ? 'active' : ''}" onclick="window.navigateFpDir('${escapeHtml(b.path)}')">${escapeHtml(b.name)}</span>
+            ${!isLast ? '<span class="agy-fp-crumb-sep">/</span>' : ''}
+          `;
+        }).join('');
+        crumbsEl.scrollLeft = crumbsEl.scrollWidth;
+      }
+
+      // Render Subdirectories List
+      if (dirListEl) {
+        const subdirs = data.subdirs || [];
+        if (subdirs.length === 0) {
+          dirListEl.innerHTML = `
+            <div class="agy-fp-empty">
+              <div style="font-size:24px;margin-bottom:6px;">📂</div>
+              <div>این پوشه خالی است.</div>
+              <div style="font-size:11px;color:#52525b;margin-top:4px;">می‌توانید با دکمه بالا یک پوشه جدید بسازید یا همین مسیر را برای پروژه انتخاب کنید.</div>
+            </div>
+          `;
+        } else {
+          dirListEl.innerHTML = subdirs.map(d => {
+            const countStr = d.item_count ? `(${d.item_count})` : '';
+            return `
+              <div class="agy-fp-folder-item" onclick="window.navigateFpDir('${escapeHtml(d.path)}')">
+                <div class="agy-fp-folder-info">
+                  <span class="agy-fp-folder-icon">📁</span>
+                  <span class="agy-fp-folder-name">${escapeHtml(d.name)}</span>
+                  <span class="agy-fp-folder-count">${countStr}</span>
+                </div>
+                <span class="agy-fp-folder-chevron">›</span>
+              </div>
+            `;
+          }).join('');
+        }
+      }
+    } catch (e) {
+      if (dirListEl) {
+        dirListEl.innerHTML = `<div class="agy-fp-empty" style="color:#ef4444;">خطا در خواندن پوشه: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+  }
+
+  function navigateFpDir(path) {
+    if (path) {
+      loadFpDirectory(path);
+    }
+  }
+
+  function navigateFpParent() {
+    if (fpParentDirectory) {
+      loadFpDirectory(fpParentDirectory);
+    }
+  }
+
+  function refreshFpDir() {
+    loadFpDirectory(fpCurrentDirectory);
+  }
+
+  function toggleFpMkdir(force) {
+    const panel = document.getElementById('fpMkdirPanel');
+    const input = document.getElementById('fpNewFolderName');
+    if (!panel) return;
+    const isShowing = typeof force === 'boolean' ? force : (panel.style.display === 'none');
+    panel.style.display = isShowing ? 'block' : 'none';
+    if (isShowing && input) {
+      input.value = '';
+      input.focus();
+    }
+  }
+
+  async function submitFpMkdir() {
+    const input = document.getElementById('fpNewFolderName');
+    const folderName = input ? input.value.trim() : '';
+
+    if (!folderName) {
+      alert('لطفاً نام پوشه جدید را وارد نمایید.');
+      if (input) input.focus();
+      return;
+    }
+
+    try {
+      const res = await authFetch('/api/fs/mkdir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parent_path: fpCurrentDirectory,
+          folder_name: folderName
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        toggleFpMkdir(false);
+        // Automatically set project name to this new folder
+        const nameIn = document.getElementById('fpProjectName');
+        if (nameIn) nameIn.value = folderName;
+        // Enter the newly created folder
+        await loadFpDirectory(data.path);
+      } else {
+        alert(data.error || 'خطا در ایجاد پوشه جدید.');
+      }
+    } catch (err) {
+      alert('خطا در ارسال درخواست ایجاد پوشه: ' + err.message);
+    }
+  }
+
+  function setFpPath(path) {
+    navigateFpDir(path);
+  }
+
+  async function submitFolderPicker() {
+    const nameIn = document.getElementById('fpProjectName');
+    let pName = nameIn ? nameIn.value.trim() : '';
+    const pPath = fpCurrentDirectory;
+
+    if (!pPath) {
+      alert('لطفاً پوشه‌ای از حافظه دستگاه انتخاب نمایید.');
+      return;
+    }
+
+    if (!pName) {
+      const parts = pPath.split('/').filter(Boolean);
+      pName = parts.pop() || 'Project';
+    }
+
+    try {
+      const res = await authFetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: pName, path: pPath })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        closeFolderPickerModal();
+        expandedProjectFolders.add(data.active_project_id);
+        await fetchProjects();
+        await switchProject(data.active_project_id);
+        updateDrawerChatList();
+        renderSettingsProjectsList();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'خطا در ایجاد پروژه');
+      }
+    } catch (e) {
+      alert('خطا در ارتباط: ' + e.message);
+    }
+  }
+
+  async function handleDeleteChat(e, chatId) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!confirm('آیا از حذف این گفتگو اطمینان دارید؟ پیام‌ها و سوابق آن پاک خواهند شد.')) {
+      return;
+    }
+    triggerHaptic(15);
+    try {
+      const res = await authFetch(`/api/chats/${chatId}`, { method: 'DELETE' });
+      if (res.ok) {
+        delete chats[chatId];
+        if (activeChatId === chatId) {
+          const remainingIds = Object.keys(chats);
+          if (remainingIds.length > 0) {
+            await switchChat(remainingIds[0]);
+          } else {
+            await createNewChat();
+          }
+        } else {
+          renderMessages();
+          updateDrawerChatList();
+          renderSettingsProjectsList();
+        }
+      }
+    } catch (err) {
+      alert('خطا در حذف گفتگو: ' + err.message);
+    }
+  }
+
+  // Universal Chat Search Engine
+  let chatSearchDebounceTimer = null;
+  function openChatSearchModal() {
+    closeDrawer();
+    const modal = document.getElementById('chatSearchModal');
+    const input = document.getElementById('chatSearchInput');
+    const results = document.getElementById('chatSearchResults');
+    if (modal) {
+      modal.classList.add('open');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      if (results) {
+        results.innerHTML = '<div class="agy-search-hint">عبارت مورد نظر خود را برای جستجو در متن پیام‌ها و چت‌ها وارد کنید...</div>';
+      }
+    }
+  }
+
+  function closeChatSearchModal() {
+    const modal = document.getElementById('chatSearchModal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  async function performChatSearch(query) {
+    const resultsContainer = document.getElementById('chatSearchResults');
+    if (!resultsContainer) return;
+
+    const q = (query || '').trim();
+    if (!q) {
+      resultsContainer.innerHTML = '<div class="agy-search-hint">عبارت مورد نظر خود را برای جستجو در متن پیام‌ها و چت‌ها وارد کنید...</div>';
+      return;
+    }
+
+    resultsContainer.innerHTML = '<div class="agy-search-hint">در حال جستجو در میان تمام گفتگوها...</div>';
+
+    try {
+      const res = await fetch(`/api/search-chats?q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error('Search request failed');
+      const data = await res.json();
+      const results = data.results || [];
+
+      if (results.length === 0) {
+        resultsContainer.innerHTML = `<div class="agy-search-hint">هیچ نتیجه‌ای برای «${escapeHtml(q)}» یافت نشد.</div>`;
+        return;
+      }
+
+      const qRegex = new RegExp(`(${escapeRegex(q)})`, 'gi');
+
+      resultsContainer.innerHTML = results.map(item => {
+        const highlightedTitle = escapeHtml(item.title).replace(qRegex, '<mark>$1</mark>');
+        const snippetHtml = item.matched_messages && item.matched_messages.length > 0 
+          ? item.matched_messages.map(m => {
+              const hlSnippet = escapeHtml(m.snippet).replace(qRegex, '<mark>$1</mark>');
+              return `<div class="agy-search-snippet"><strong>${m.role === 'user' ? 'شما:' : 'هوش مصنوعی:'}</strong> ${hlSnippet}</div>`;
+            }).join('')
+          : '';
+
+        return `
+          <div class="agy-search-item" onclick="window.selectSearchResult('${escapeHtml(item.project_id)}', '${escapeHtml(item.chat_id)}')">
+            <div class="agy-search-item-top">
+              <span class="agy-search-item-title">${highlightedTitle}</span>
+              <span class="agy-search-item-proj">📁 ${escapeHtml(item.project_name)}</span>
+            </div>
+            ${snippetHtml}
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      resultsContainer.innerHTML = `<div class="agy-search-hint" style="color:#ef4444;">خطا در جستجو: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  async function selectSearchResult(projectId, chatId) {
+    closeChatSearchModal();
+    if (projectId && projectId !== activeProjectId) {
+      await authFetch(`/api/projects/${projectId}/switch`, { method: 'POST' });
+      activeProjectId = projectId;
+      expandedProjectFolders.add(projectId);
+    }
+    await switchChat(chatId);
+  }
+
+  function escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // Settings Projects & Chats Manager Pane
+  async function renderSettingsProjectsList() {
+    const container = document.getElementById('settingsProjectsMgmtList');
+    if (!container) return;
+    container.innerHTML = '<div style="color:#71717a;font-size:12px;padding:10px;">در حال بارگذاری لیست پروژه‌ها و گفتگوها...</div>';
+
+    try {
+      const res = await fetch('/api/projects');
+      if (!res.ok) return;
+      const data = await res.json();
+      const projList = data.projects || [];
+      if (projList.length === 0) {
+        container.innerHTML = '<div style="color:#71717a;font-size:12px;padding:10px;">هیچ پروژه‌ای یافت نشد.</div>';
+        return;
+      }
+
+      container.innerHTML = projList.map(p => {
+        const isAct = p.id === activeProjectId;
+        const chatsList = p.chats || [];
+        return `
+          <div class="agy-pm-card ${isAct ? 'active-proj' : ''}">
+            <div class="agy-pm-header">
+              <div>
+                <div class="agy-pm-title">📁 ${escapeHtml(p.name)} ${isAct ? '<span class="agy-active-badge">فضای کاری فعال</span>' : ''}</div>
+                <div class="agy-pm-path">${escapeHtml(p.path || '')}</div>
+              </div>
+              <div class="agy-pm-actions">
+                ${!isAct ? `<button type="button" class="agy-btn-ghost" onclick="window.switchProjectFromSettings('${escapeHtml(p.id)}')">فعال‌سازی</button>` : ''}
+                ${projList.length > 1 ? `<button type="button" class="agy-btn-danger-ghost" onclick="window.deleteProjectFromSettings('${escapeHtml(p.id)}')">حذف پروژه</button>` : ''}
+              </div>
+            </div>
+            
+            <div class="agy-pm-chats-table">
+              <div style="font-size:11px;color:#71717a;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+                <span>گفتگوهای این پروژه (${chatsList.length}):</span>
+                <button type="button" style="background:none;border:none;color:#e4e4e7;cursor:pointer;font-size:11px;font-weight:500;" onclick="window.createNewChatInProject(null, '${escapeHtml(p.id)}'); window.closeSettingsModal();">+ چت جدید</button>
+              </div>
+              ${chatsList.length > 0 ? chatsList.map(c => `
+                <div class="agy-pm-chat-row">
+                  <span class="agy-pm-chat-title" title="${escapeHtml(c.title)}">${escapeHtml(c.title || 'گفتگو')}</span>
+                  <div class="agy-pm-chat-actions">
+                    <span style="font-size:10px;color:#71717a;font-family:var(--font-mono);">${c.time_str || ''}</span>
+                    <button type="button" class="agy-btn-ghost" style="padding:2px 8px;font-size:10.5px;" onclick="window.openChatFromSettings('${escapeHtml(p.id)}', '${escapeHtml(c.id)}')">باز کردن</button>
+                    <button type="button" class="agy-btn-danger-ghost" style="padding:2px 8px;font-size:10.5px;" title="حذف چت" onclick="window.handleDeleteChat(event, '${escapeHtml(c.id)}')">✕</button>
+                  </div>
+                </div>
+              `).join('') : '<div style="font-size:11px;color:#71717a;padding:4px;">بدون گفتگو</div>'}
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      console.warn('Error loading settings projects list:', e);
+    }
+  }
+
+  async function switchProjectFromSettings(projectId) {
+    await switchProject(projectId);
+    renderSettingsProjectsList();
+    updateDrawerChatList();
+  }
+
+  async function deleteProjectFromSettings(projectId) {
+    if (!confirm('آیا از حذف این پروژه مطمئن هستید؟ فایل‌های پروژه روی دیسک باقی می‌مانند اما گفتگوهای آن حذف خواهند شد.')) {
+      return;
+    }
+    try {
+      const res = await authFetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchProjects();
+        renderSettingsProjectsList();
+        updateDrawerChatList();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'خطا در حذف پروژه');
+      }
+    } catch (e) {
+      alert('خطا: ' + e.message);
+    }
+  }
+
+  async function openChatFromSettings(projectId, chatId) {
+    closeSettingsModal();
+    if (projectId !== activeProjectId) {
+      await authFetch(`/api/projects/${projectId}/switch`, { method: 'POST' });
+      activeProjectId = projectId;
+      expandedProjectFolders.add(projectId);
+    }
+    await switchChat(chatId);
+  }
+
+  async function switchChat(chatId) {
+    if (activeChatId === chatId && chats[chatId] && chats[chatId].messages && chats[chatId].messages.length > 0) {
       closeDrawer();
       return;
     }
@@ -1944,10 +2725,21 @@
       ws.send(JSON.stringify({ type: 'switch_chat', chat_id: chatId }));
     }
 
-    const chat = chats[chatId];
-    if (chat && chat.model) {
-      currentModel = chat.model;
-      if (headerModelText) headerModelText.textContent = currentModel;
+    try {
+      const res = await authFetch(`/api/chats/${chatId}`);
+      if (res.ok) {
+        const fullChat = await res.json();
+        chats[chatId] = fullChat;
+        if (fullChat.model) {
+          currentModel = fullChat.model;
+          const found = availableModels.find(m => m.id === currentModel);
+          const dockModelName = document.getElementById('dockModelName');
+          if (dockModelName && found) dockModelName.textContent = found.name;
+          if (headerModelText) headerModelText.textContent = currentModel;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch full chat:', e);
     }
 
     renderMessages();
@@ -1956,8 +2748,24 @@
   }
 
   async function createNewChat() {
+    return createNewChatInProject(null, activeProjectId);
+  }
+
+  async function createNewChatInProject(e, projectId) {
+    if (e) e.stopPropagation();
     closeDrawer();
     triggerHaptic(15);
+    const pid = projectId || activeProjectId || 'proj_default';
+
+    if (pid !== activeProjectId) {
+      try {
+        await authFetch(`/api/projects/${pid}/switch`, { method: 'POST' });
+        activeProjectId = pid;
+      } catch (err) {
+        console.warn('Project switch error:', err);
+      }
+    }
+
     const newId = `chat_${Date.now()}`;
     const newChatObj = {
       id: newId,
@@ -1968,7 +2776,7 @@
       effort: currentEffort,
       mode: currentMode,
       cwd: workspaceDir,
-      project_id: activeProjectId || 'proj_default',
+      project_id: pid,
       messages: []
     };
     chats[newId] = newChatObj;
@@ -1982,7 +2790,7 @@
       const res = await authFetch('/api/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: newId, title: 'گفتگوی جدید', model: currentModel, project_id: activeProjectId })
+        body: JSON.stringify({ id: newId, title: 'گفتگوی جدید', model: currentModel, project_id: pid })
       });
       if (res.ok) {
         const serverChat = await res.json();
@@ -2077,6 +2885,12 @@
       const data = await res.json();
       if (data && data.models) {
         availableModels = data.models;
+        renderModelDropdownList();
+        const found = availableModels.find(m => m.id === currentModel);
+        if (found) {
+          const dockModelName = document.getElementById('dockModelName');
+          if (dockModelName) dockModelName.textContent = found.name;
+        }
         if (modelSelect) {
           modelSelect.innerHTML = '';
           availableModels.forEach(m => {
@@ -2090,6 +2904,29 @@
       }
     } catch (e) {
       console.warn('Could not fetch models:', e);
+    }
+  }
+
+  async function fetchInitialSettings() {
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.global) {
+          if (data.global.permission_preset) {
+            const dockPolicyName = document.getElementById('dockPolicyName');
+            if (dockPolicyName) dockPolicyName.textContent = data.global.permission_preset;
+          }
+          if (data.global.default_model) {
+            currentModel = data.global.default_model;
+            const found = availableModels.find(m => m.id === currentModel);
+            const dockModelName = document.getElementById('dockModelName');
+            if (dockModelName && found) dockModelName.textContent = found.name;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch initial settings:', e);
     }
   }
 
@@ -2200,6 +3037,12 @@
       }
       if (data.models) {
         availableModels = data.models;
+        renderModelDropdownList();
+        const found = availableModels.find(m => m.id === currentModel);
+        if (found) {
+          const dockModelName = document.getElementById('dockModelName');
+          if (dockModelName) dockModelName.textContent = found.name;
+        }
       }
       if (data.effort) {
         currentEffort = data.effort;
@@ -2227,24 +3070,26 @@
     } else if (type === 'status') {
       const text = data.status;
       if (text) {
-        if (thinkingRow) thinkingRow.classList.add('active');
-        if (thinkingText) thinkingText.textContent = text;
+        if (!liveThinkingEl) {
+          if (thinkingRow) thinkingRow.classList.add('active');
+          if (thinkingText) thinkingText.textContent = text;
+        }
         scrollToBottom();
       } else {
         if (thinkingRow) thinkingRow.classList.remove('active');
       }
     } else if (type === 'thinking_update') {
-      if (liveThinkingEl && data.thinking) {
-        const body = liveThinkingEl.querySelector('.thinking-body');
-        if (body) {
-          body.textContent = data.thinking;
-        }
-        const badge = liveThinkingEl.querySelector('.thinking-badge');
-        const elapsed = ((Date.now() - liveThinkingStartTime) / 1000).toFixed(1);
-        const tok = data.tokens ? ` • ${data.tokens} توکن` : '';
-        if (badge) badge.textContent = `${elapsed}s${tok}`;
-        scrollToBottom();
+      lastTurnThinkingText = data.thinking || '';
+      if (currentLiveFeedEl) {
+        const thinkingBodies = currentLiveFeedEl.querySelectorAll('.agy-feed-item.thinking .agy-feed-body');
+        thinkingBodies.forEach(b => {
+          if (!b.textContent || b.textContent.length < lastTurnThinkingText.length) {
+            b.textContent = lastTurnThinkingText;
+          }
+        });
       }
+    } else if (type === 'thinking_step') {
+      handleThinkingStep(data);
     } else if (type === 'effort_updated') {
       currentEffort = data.effort;
       updateEffortPill(currentEffort);
@@ -2260,26 +3105,18 @@
         saveToLocalStorage();
       }
     } else if (type === 'turn_stopped') {
-      if (liveThinkingTimer) {
-        clearInterval(liveThinkingTimer);
-        liveThinkingTimer = null;
-      }
-      if (liveThinkingEl) {
-        liveThinkingEl.classList.remove('pulse-active');
-        const badge = liveThinkingEl.querySelector('.thinking-badge');
-        if (badge) badge.textContent = 'متوقف شد';
+      if (currentFeedStatusEl) {
+        currentFeedStatusEl.remove();
+        currentFeedStatusEl = null;
       }
       resetSendBtnState();
       if (activeStreamingBubble) {
         activeStreamingBubble.innerHTML += '<br><em style="color:#ef4444;font-size:11px;">[عملیات متوقف گردید]</em>';
       }
       activeStreamingBubble = null;
-      activeLiveCliEl = null;
+      currentLiveFeedEl = null;
       currentStreamText = '';
-      currentAccordionEl = null;
-      liveThinkingEl = null;
     } else if (type === 'cli_output') {
-      if (thinkingRow) thinkingRow.classList.remove('active');
       if (activeLiveCliEl && data.line) {
         const lineEl = document.createElement('div');
         const text = data.line;
@@ -2306,11 +3143,16 @@
     } else if (type === 'permission_request') {
       handlePermissionRequest(data);
     } else if (type === 'delta') {
-      if (thinkingRow) thinkingRow.classList.remove('active');
-
+      if (currentFeedStatusEl) {
+        currentFeedStatusEl.remove();
+        currentFeedStatusEl = null;
+      }
       if (!activeStreamingBubble) {
         currentStreamText = '';
         activeStreamingBubble = appendMessageBubble('assistant', '', null, true);
+      }
+      if (activeStreamingBubble) {
+        activeStreamingBubble.style.display = '';
       }
 
       currentStreamText += data.delta;
@@ -2321,24 +3163,14 @@
       }
       scrollToBottom();
     } else if (type === 'done') {
-      if (thinkingRow) thinkingRow.classList.remove('active');
-
-      if (liveThinkingTimer) {
-        clearInterval(liveThinkingTimer);
-        liveThinkingTimer = null;
+      if (currentFeedStatusEl) {
+        currentFeedStatusEl.remove();
+        currentFeedStatusEl = null;
       }
-      if (liveThinkingEl) {
-        liveThinkingEl.classList.remove('pulse-active');
-        const titleSpan = liveThinkingEl.querySelector('.thinking-title-wrap span:last-child');
-        if (titleSpan) titleSpan.textContent = 'فرایند تفکر ایجنت (Thinking Process)';
-        const badge = liveThinkingEl.querySelector('.thinking-badge');
-        const totalElapsed = ((Date.now() - liveThinkingStartTime) / 1000).toFixed(1);
-        const tok = data.meta && data.meta.thinking_tokens ? ` • ${data.meta.thinking_tokens} توکن` : '';
-        if (badge) badge.textContent = `${totalElapsed}s${tok}`;
-        if (data.meta && data.meta.thinking) {
-          const body = liveThinkingEl.querySelector('.thinking-body');
-          if (body) body.textContent = data.meta.thinking;
-        }
+      resetSendBtnState();
+      playCompletionSound();
+      if (activeStreamingBubble) {
+        activeStreamingBubble.style.display = '';
       }
       resetSendBtnState();
 
@@ -2475,62 +3307,69 @@
     btnSend.classList.add('stop-mode');
     btnSend.title = 'توقف پردازش (Stop)';
 
-    // Start Live Turn UI Container
+    // Start Live Turn UI Container (Antigravity 2.0 Minimalist Live Feed)
     const row = document.createElement('div');
-    row.className = 'msg-row assistant';
+    row.className = 'msg-row assistant minimal-turn';
 
-    const header = document.createElement('div');
-    header.className = 'assistant-header';
-    header.innerHTML = `
-      <div class="assistant-avatar">⚡</div>
-      <span class="assistant-name">Antigravity</span>
-      <span class="msg-meta" style="margin-right:auto;">هم‌اکنون</span>
-    `;
-    row.appendChild(header);
+    const feed = document.createElement('div');
+    feed.className = 'agy-live-feed';
 
-    // Live Thinking Accordion
-    liveThinkingStartTime = Date.now();
-    liveThinkingEl = createThinkingAccordion('', 0, 0, true);
-    row.appendChild(liveThinkingEl);
+    const statusEl = document.createElement('div');
+    statusEl.className = 'agy-feed-status';
+    statusEl.innerHTML = '<span class="agy-feed-status-text">Working</span>';
+    feed.appendChild(statusEl);
 
-    liveThinkingTimer = setInterval(() => {
-      const elapsed = ((Date.now() - liveThinkingStartTime) / 1000).toFixed(1);
-      const badge = liveThinkingEl.querySelector('.thinking-badge');
-      if (badge) badge.textContent = `${elapsed}s`;
-    }, 200);
+    row.appendChild(feed);
 
-    // Live CLI Output Box (Real-time direct terminal stream)
-    const cliEl = document.createElement('div');
-    cliEl.className = 'live-cli-stream';
-    row.appendChild(cliEl);
-    activeLiveCliEl = cliEl;
-
-    // Live Assistant Bubble
+    // Live Assistant Bubble (Pure typography, no borders, rendered directly on pitch-black canvas)
     const bubble = document.createElement('div');
     bubble.className = 'bubble ai-bubble';
     bubble.setAttribute('dir', 'auto');
-    bubble.innerHTML = '<span style="color:#71717a;">در حال تفکر و پردازش...</span>';
+    bubble.style.display = 'none';
     row.appendChild(bubble);
 
     chatInner.appendChild(row);
+    currentLiveFeedEl = feed;
+    currentFeedStatusEl = statusEl;
     activeStreamingBubble = bubble;
     currentStreamText = '';
-    currentAccordionEl = null;
+    lastTurnThinkingText = '';
+    liveThinkingStartTime = Date.now();
     scrollToBottom(true);
 
     // Send to WebSocket
+    const msgPayload = JSON.stringify({
+      type: 'user_message',
+      content: text,
+      chat_id: activeChatId,
+      model: currentModel,
+      effort: currentEffort,
+      mode: currentMode
+    });
+
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'user_message',
-        content: text,
-        chat_id: activeChatId,
-        model: currentModel,
-        effort: currentEffort,
-        mode: currentMode
-      }));
+      ws.send(msgPayload);
+    } else if (ws && ws.readyState === WebSocket.CONNECTING) {
+      const waitInterval = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          clearInterval(waitInterval);
+          ws.send(msgPayload);
+        } else if (!ws || ws.readyState !== WebSocket.CONNECTING) {
+          clearInterval(waitInterval);
+          appendMessageBubble('assistant', '⚠️ خطا در برقراری ارتباط با سرور. لطفاً دوباره تلاش کنید.', Date.now() / 1000, true, true);
+          resetSendBtnState();
+        }
+      }, 100);
     } else {
-      appendMessageBubble('assistant', '⚠️ در حال برقراری مجدد ارتباط با سرور... لطفاً دوباره تلاش کنید.', Date.now() / 1000, true, true);
-      resetSendBtnState();
+      connectWebSocket();
+      setTimeout(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(msgPayload);
+        } else {
+          appendMessageBubble('assistant', '⚠️ در حال برقراری مجدد ارتباط با سرور... لطفاً دوباره تلاش کنید.', Date.now() / 1000, true, true);
+          resetSendBtnState();
+        }
+      }, 500);
     }
   }
 
@@ -2593,42 +3432,121 @@
     }, 6000);
   }
 
-  // Model Picker Bottom Sheet
-  function openModelSheet() {
-    triggerHaptic(15);
-    if (!modelSheetBackdrop || !modelSheetBody) return;
-    modelSheetBody.innerHTML = '';
-
-    availableModels.forEach(m => {
-      const card = document.createElement('div');
-      card.className = `model-choice-card ${m.id === currentModel ? 'selected' : ''}`;
-      card.innerHTML = `
-        <div>
-          <div class="model-choice-name">${escapeHtml(m.name)}</div>
-          <div class="model-choice-id">${escapeHtml(m.id)}</div>
+  // =========================================================================
+  // Antigravity 2.0 Dock Dropdowns (Model Picker & Policy Preset)
+  // =========================================================================
+  function renderModelDropdownList() {
+    const list = document.getElementById('dockModelDropdownList');
+    if (!list) return;
+    list.innerHTML = availableModels.map(m => {
+      const isSel = (m.id === currentModel);
+      return `
+        <div class="agy-dropdown-item ${isSel ? 'selected' : ''}" onclick="window.selectModel('${escapeHtml(m.id)}')">
+          <div class="agy-dropdown-item-info">
+            <span class="agy-dropdown-item-title">${escapeHtml(m.name)}</span>
+            <span class="agy-dropdown-item-desc">${escapeHtml(m.id)}</span>
+          </div>
+          <span class="agy-dropdown-check">✓</span>
         </div>
-        ${m.id === currentModel ? '<span style="color:#00f0ff;font-weight:bold;">✓</span>' : ''}
       `;
-      card.onclick = () => {
-        triggerHaptic(20);
-        selectModel(m.id);
-        closeModelSheet();
-      };
-      modelSheetBody.appendChild(card);
-    });
-
-    modelSheetBackdrop.classList.add('active');
+    }).join('');
   }
 
-  function closeModelSheet() {
-    if (modelSheetBackdrop) modelSheetBackdrop.classList.remove('active');
+  function toggleModelDropdown(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    triggerHaptic(10);
+    const menu = document.getElementById('dockModelDropdown');
+    const policyMenu = document.getElementById('dockPolicyDropdown');
+    if (policyMenu) policyMenu.classList.remove('active');
+
+    if (menu) {
+      const willOpen = !menu.classList.contains('active');
+      if (willOpen) {
+        renderModelDropdownList();
+        menu.classList.add('active');
+      } else {
+        menu.classList.remove('active');
+      }
+    }
+  }
+
+  function togglePolicyDropdown(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    triggerHaptic(10);
+    const menu = document.getElementById('dockPolicyDropdown');
+    const modelMenu = document.getElementById('dockModelDropdown');
+    if (modelMenu) modelMenu.classList.remove('active');
+
+    if (menu) {
+      const willOpen = !menu.classList.contains('active');
+      if (willOpen) {
+        const dockPolicyName = document.getElementById('dockPolicyName');
+        const cur = dockPolicyName ? dockPolicyName.textContent.trim() : 'Auto';
+        const items = menu.querySelectorAll('.agy-dropdown-item');
+        items.forEach(el => {
+          if (el.getAttribute('data-preset') === cur) {
+            el.classList.add('selected');
+          } else {
+            el.classList.remove('selected');
+          }
+        });
+        menu.classList.add('active');
+      } else {
+        menu.classList.remove('active');
+      }
+    }
+  }
+
+  function selectPolicyPreset(preset) {
+    triggerHaptic(15);
+    const dockPolicyName = document.getElementById('dockPolicyName');
+    if (dockPolicyName) dockPolicyName.textContent = preset;
+
+    const items = document.querySelectorAll('#dockPolicyDropdownList .agy-dropdown-item');
+    items.forEach(el => {
+      if (el.getAttribute('data-preset') === preset) {
+        el.classList.add('selected');
+      } else {
+        el.classList.remove('selected');
+      }
+    });
+
+    closeAllDockDropdowns();
+
+    // Sync settings UI selector if present
+    const sel = document.getElementById('settingPermissionPreset');
+    if (sel) sel.value = preset;
+
+    autoSaveSetting('permission_preset', preset);
+  }
+
+  function closeAllDockDropdowns() {
+    const modelMenu = document.getElementById('dockModelDropdown');
+    const policyMenu = document.getElementById('dockPolicyDropdown');
+    if (modelMenu) modelMenu.classList.remove('active');
+    if (policyMenu) policyMenu.classList.remove('active');
   }
 
   function selectModel(modelId) {
+    triggerHaptic(15);
     currentModel = modelId;
-    if (pillModelText) pillModelText.textContent = modelId;
-    if (headerModelText) headerModelText.textContent = modelId;
+    const found = availableModels.find(m => m.id === modelId);
+    const displayName = found ? found.name : modelId;
+
+    const dockModelName = document.getElementById('dockModelName');
+    if (dockModelName) dockModelName.textContent = displayName;
+    if (pillModelText) pillModelText.textContent = displayName;
+    if (headerModelText) headerModelText.textContent = displayName;
     if (modelSelect) modelSelect.value = modelId;
+
+    renderModelDropdownList();
+    closeAllDockDropdowns();
 
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'set_model', chat_id: activeChatId, model: modelId }));
@@ -2637,6 +3555,16 @@
       chats[activeChatId].model = modelId;
       saveToLocalStorage();
     }
+    autoSaveSetting('default_model', modelId);
+  }
+
+  // Backwards compatibility
+  function openModelSheet() {
+    toggleModelDropdown();
+  }
+
+  function closeModelSheet() {
+    closeAllDockDropdowns();
   }
 
   // =========================================================================
@@ -2848,6 +3776,275 @@
     }
   }
 
+  // =========================================================================
+  // Antigravity 2.0 Official Settings & Architecture Controller (Images 3, 4, 5)
+  // =========================================================================
+  const settingsModal = document.getElementById('settingsModal');
+
+  async function openSettingsModal() {
+    closeDrawer();
+    if (settingsModal) settingsModal.classList.add('open', 'active');
+    renderSettingsProjectsList();
+
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        applySettingsToForm(data);
+      }
+    } catch (e) {
+      console.warn('[Settings] Failed to fetch server settings:', e);
+    }
+  }
+
+  function closeSettingsModal() {
+    if (settingsModal) settingsModal.classList.remove('open', 'active');
+  }
+
+  function switchSettingsTab(tabName) {
+    triggerHaptic(10);
+    document.querySelectorAll('.agy-settings-nav-item').forEach(btn => {
+      const isActive = btn.getAttribute('data-tab') === tabName;
+      btn.classList.toggle('active', isActive);
+      if (isActive && window.innerWidth <= 768) {
+        btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    });
+    document.querySelectorAll('.agy-settings-pane').forEach(pane => {
+      pane.classList.toggle('active', pane.id === `pane-${tabName}`);
+    });
+    if (tabName === 'projects') {
+      renderSettingsProjectsList();
+    }
+  }
+
+  let audioToneEnabled = false;
+
+  function playCompletionSound() {
+    if (!audioToneEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.22);
+    } catch (e) {
+      console.warn('[Audio] Feedback chime error:', e);
+    }
+  }
+
+  function applySettingsToForm(data) {
+    if (!data) return;
+    const glob = data.global || {};
+
+    // General Tab
+    const selPreset = document.getElementById('settingPermissionPreset');
+    if (selPreset && glob.permission_preset) {
+      selPreset.value = glob.permission_preset;
+      if (!selPreset.value) selPreset.value = 'Turbo';
+    }
+
+    const selPlan = document.getElementById('settingPlanPolicy');
+    if (selPlan && glob.artifact_review) {
+      selPlan.value = glob.artifact_review;
+    }
+
+    if (glob.queued_messages) {
+      setSegmentedValue('ctrlQueuedMessages', glob.queued_messages);
+    }
+
+    // Audio Chime Settings
+    const chkSound = document.getElementById('settingEnableSounds');
+    if (chkSound) {
+      chkSound.checked = !!glob.enable_sounds;
+      audioToneEnabled = !!glob.enable_sounds;
+    }
+
+    const rngVolume = document.getElementById('settingSoundVolume');
+    const lblVolume = document.getElementById('settingVolumeLabel');
+    if (rngVolume && glob.sound_volume !== undefined) {
+      rngVolume.value = glob.sound_volume;
+      if (lblVolume) lblVolume.textContent = glob.sound_volume + '%';
+    }
+
+    // Models Tab
+    const modelsContainer = document.getElementById('settingsModelsListContainer');
+    const modelList = (Array.isArray(glob.models) && glob.models.length > 0) ? glob.models : (availableModels || []);
+    if (modelsContainer && modelList.length > 0) {
+      modelsContainer.innerHTML = modelList.map(m => {
+        const isSelected = m.id === (glob.default_model || currentModel);
+        return `
+          <div class="agy-model-card ${isSelected ? 'selected' : ''}" onclick="selectModelOption('${escapeHtml(m.id)}')">
+            <div class="agy-row-info">
+              <div class="agy-row-label">${escapeHtml(m.name)}</div>
+              <div class="agy-row-desc">${escapeHtml(m.id)}</div>
+            </div>
+            <div class="agy-model-radio-indicator">
+              <input type="radio" name="settings_active_model" value="${escapeHtml(m.id)}" ${isSelected ? 'checked' : ''}>
+              <span class="agy-radio-custom"></span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Sync to Dock policy chip & model chip
+    const dockPolicyName = document.getElementById('dockPolicyName');
+    if (dockPolicyName && glob.permission_preset) dockPolicyName.textContent = glob.permission_preset;
+
+    const dockModelName = document.getElementById('dockModelName');
+    if (dockModelName && glob.default_model) {
+      const found = (glob.models || []).find(m => m.id === glob.default_model);
+      dockModelName.textContent = found ? found.name : glob.default_model;
+    }
+  }
+
+  function selectModelOption(id) {
+    triggerHaptic(10);
+    autoSaveSetting('default_model', id);
+    document.querySelectorAll('.agy-model-card').forEach(card => {
+      const radio = card.querySelector('input[type="radio"]');
+      const isThis = radio && radio.value === id;
+      card.classList.toggle('selected', isThis);
+      if (radio) radio.checked = isThis;
+    });
+  }
+  window.selectModelOption = selectModelOption;
+
+  function setSegmentedValue(containerId, value, settingKey) {
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.querySelectorAll('.agy-seg-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.trim().toLowerCase() === String(value).trim().toLowerCase());
+      });
+    }
+    if (settingKey) autoSaveSetting(settingKey, value);
+  }
+  window.setSegmentedValue = setSegmentedValue;
+
+  async function autoSaveSetting(key, value) {
+    triggerHaptic(10);
+    if (key === 'enable_sounds') {
+      audioToneEnabled = !!value;
+    }
+    try {
+      const payload = { global: {} };
+      payload.global[key] = value;
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (key === 'permission_preset') {
+        const dockPolicyName = document.getElementById('dockPolicyName');
+        if (dockPolicyName) dockPolicyName.textContent = value;
+      } else if (key === 'default_model') {
+        currentModel = value;
+        const dockModelName = document.getElementById('dockModelName');
+        if (dockModelName) dockModelName.textContent = value;
+        if (headerModelText) headerModelText.textContent = value;
+        if (pillModelText) pillModelText.textContent = value;
+      }
+    } catch (e) {
+      console.warn('[Settings] Error auto-saving setting:', e);
+    }
+  }
+
+  function cyclePolicyPreset() {
+    triggerHaptic(10);
+    const presets = ['Turbo', 'Accept Edits', 'Auto', 'Request Review', 'Strict'];
+    const dockPolicyName = document.getElementById('dockPolicyName');
+    const current = dockPolicyName ? dockPolicyName.textContent.trim() : 'Turbo';
+    let nextIdx = (presets.indexOf(current) + 1) % presets.length;
+    if (nextIdx < 0) nextIdx = 0;
+    const nextVal = presets[nextIdx];
+    if (dockPolicyName) dockPolicyName.textContent = nextVal;
+    const sel = document.getElementById('settingPermissionPreset');
+    if (sel) sel.value = nextVal;
+    autoSaveSetting('permission_preset', nextVal);
+  }
+
+  function applyAppTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    autoSaveSetting('theme', theme);
+  }
+
+  async function saveSettingsForm() {
+    closeSettingsModal();
+  }
+
+  async function initProjectAgentsDir() {
+    triggerHaptic(10);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_overrides: {
+            has_agents_dir: true
+          }
+        })
+      });
+      alert('ساختار استاندارد .agents/ برای این پروژه در حافظه ثبت گردید.');
+    } catch (e) {
+      alert('خطا: ' + e.message);
+    }
+  }
+
+  // Expose global window actions for direct HTML onclick triggers
+  window.toggleModelDropdown = toggleModelDropdown;
+  window.togglePolicyDropdown = togglePolicyDropdown;
+  window.selectModel = selectModel;
+  window.selectPolicyPreset = selectPolicyPreset;
+  window.closeAllDockDropdowns = closeAllDockDropdowns;
+  window.openModelSheet = openModelSheet;
+  window.closeModelSheet = closeModelSheet;
+  window.openSettingsModal = openSettingsModal;
+  window.closeSettingsModal = closeSettingsModal;
+  window.switchSettingsTab = switchSettingsTab;
+  window.saveSettingsForm = saveSettingsForm;
+  window.initProjectAgentsDir = initProjectAgentsDir;
+  window.autoSaveSetting = autoSaveSetting;
+  window.setSegmentedValue = setSegmentedValue;
+  window.cyclePolicyPreset = cyclePolicyPreset;
+  window.applyAppTheme = applyAppTheme;
+  window.openDrawer = openDrawer;
+  window.closeDrawer = closeDrawer;
+  window.createNewChat = createNewChat;
+  window.createNewChatInProject = createNewChatInProject;
+  window.switchChat = switchChat;
+  window.switchProject = switchProject;
+  window.promptNewProject = promptNewProject;
+  window.toggleProjectFilter = toggleProjectFilter;
+  window.filterDrawerProjects = filterDrawerProjects;
+  window.sendMessage = sendMessage;
+  window.openChatSearchModal = openChatSearchModal;
+  window.closeChatSearchModal = closeChatSearchModal;
+  window.performChatSearch = performChatSearch;
+  window.selectSearchResult = selectSearchResult;
+  window.setFpPath = setFpPath;
+  window.submitFolderPicker = submitFolderPicker;
+  window.closeFolderPickerModal = closeFolderPickerModal;
+  window.navigateFpDir = navigateFpDir;
+  window.navigateFpParent = navigateFpParent;
+  window.refreshFpDir = refreshFpDir;
+  window.toggleFpMkdir = toggleFpMkdir;
+  window.submitFpMkdir = submitFpMkdir;
+  window.handleDeleteChat = handleDeleteChat;
+  window.renderSettingsProjectsList = renderSettingsProjectsList;
+  window.switchProjectFromSettings = switchProjectFromSettings;
+  window.deleteProjectFromSettings = deleteProjectFromSettings;
+  window.openChatFromSettings = openChatFromSettings;
+
   // Helper to bind guaranteed tap/click events
   function bindAction(el, handler) {
     if (!el) return;
@@ -2929,11 +4126,20 @@
       }
     });
 
-    // Close popovers on click outside
+    // Close popovers and dock dropdowns on click outside
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.input-container')) {
         closeSlashPopover();
         closeMentionsPopover();
+      }
+      if (!e.target.closest('#dockModelWrapper') && !e.target.closest('#dockPolicyWrapper')) {
+        closeAllDockDropdowns();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeAllDockDropdowns();
       }
     });
 
@@ -3111,6 +4317,13 @@
       });
     }
 
+    // Settings Modal backdrop click
+    if (settingsModal) {
+      settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) closeSettingsModal();
+      });
+    }
+
     // Attach File / Image
     const btnAttachFile = document.getElementById('btnAttachFile');
     const fileAttachmentInput = document.getElementById('fileAttachmentInput');
@@ -3180,6 +4393,58 @@
         inputMessage.dispatchEvent(new Event('input'));
         sendMessage();
       });
+    });
+
+    // Chat Search Engine Input & Modals
+    const chatSearchInput = document.getElementById('chatSearchInput');
+    if (chatSearchInput) {
+      chatSearchInput.addEventListener('input', (e) => {
+        clearTimeout(chatSearchDebounceTimer);
+        chatSearchDebounceTimer = setTimeout(() => {
+          performChatSearch(e.target.value);
+        }, 200);
+      });
+      chatSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeChatSearchModal();
+      });
+    }
+
+    const chatSearchModal = document.getElementById('chatSearchModal');
+    if (chatSearchModal) {
+      chatSearchModal.addEventListener('click', (e) => {
+        if (e.target === chatSearchModal) closeChatSearchModal();
+      });
+    }
+
+    const folderPickerModal = document.getElementById('folderPickerModal');
+    if (folderPickerModal) {
+      folderPickerModal.addEventListener('click', (e) => {
+        if (e.target === folderPickerModal) closeFolderPickerModal();
+      });
+    }
+
+    const fpNewFolderName = document.getElementById('fpNewFolderName');
+    if (fpNewFolderName) {
+      fpNewFolderName.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitFpMkdir();
+        } else if (e.key === 'Escape') {
+          toggleFpMkdir(false);
+        }
+      });
+    }
+
+    // Global keyboard shortcut Ctrl+K / Cmd+K
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        openChatSearchModal();
+      }
+      if (e.key === 'Escape') {
+        closeChatSearchModal();
+        closeFolderPickerModal();
+      }
     });
   }
 
@@ -3278,27 +4543,37 @@
     }
   }
 
-  // Register PWA Service Worker & Force Update
+  // Clear any legacy Service Worker caches to ensure fresh code
   function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js?v=3.2').then((reg) => {
-        reg.update();
-        console.log('[PWA] ServiceWorker updated:', reg.scope);
-      }).catch((err) => {
-        console.warn('[PWA] ServiceWorker error:', err);
-      });
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const reg of registrations) {
+          reg.unregister();
+        }
+      }).catch(() => {});
     }
   }
 
   // Initialize
   async function init() {
     loadFromLocalStorage();
+    connectWebSocket();
+
+    const foundModel = availableModels.find(m => m.id === currentModel);
+    const dockModelName = document.getElementById('dockModelName');
+    if (dockModelName && foundModel) dockModelName.textContent = foundModel.name;
+    renderModelDropdownList();
+
     if (headerModelText) headerModelText.textContent = currentModel;
     if (pillModelText) pillModelText.textContent = currentModel;
     updateEffortPill(currentEffort);
     updateModePill(currentMode);
 
-    renderMessages();
+    try {
+      renderMessages();
+    } catch (err) {
+      console.error('[App] renderMessages error:', err);
+    }
     updateDrawerChatList();
 
     setupEvents();
@@ -3306,17 +4581,13 @@
     initVoiceInput();
     startPingWatchdog();
 
-    // Check authentication first
-    const isAuthed = await checkAuthStatus();
-    if (isAuthed) {
-      connectWebSocket();
-      fetchAccountQuota();
-      fetchServerChats();
-      fetchModels();
-      fetchWorkspace();
-      fetchProcesses();
-      fetchMentions();
-    }
+    fetchInitialSettings();
+    fetchAccountQuota();
+    fetchServerChats();
+    fetchModels();
+    fetchWorkspace();
+    fetchProcesses();
+    fetchMentions();
 
     registerServiceWorker();
 
