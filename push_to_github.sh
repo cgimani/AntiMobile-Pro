@@ -30,7 +30,7 @@ echo ""
 # 1. Privacy & Security Sanity Check
 echo -e "${BLUE}🔍 مرحله ۱: بررسی و ممیزی داده‌های شخصی و حساس...${NC}"
 
-SENSITIVE_FILES=("chat_history.json" "auth_config.json" "server.log" ".env")
+SENSITIVE_FILES=("chat_history.json" "auth_config.json" "server.log" ".env" "jetski-standalone-oauth-token" "oauth_token.json" "auth.json" "token.json" "credentials.json")
 for f in "${SENSITIVE_FILES[@]}"; do
     if [ -f "$DIR/$f" ]; then
         echo -e "${YELLOW}   ⚠️ فایل حساس یافت شد: $f - در حال بررسی وضعیت در گیت...${NC}"

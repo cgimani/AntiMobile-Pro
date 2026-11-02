@@ -2100,16 +2100,16 @@
         const nameEl = document.getElementById('sidebarUserName');
         const emailEl = document.getElementById('sidebarUserEmail');
         const avatarEl = document.getElementById('userAvatarText');
-        if (nameEl) nameEl.textContent = data.user.name || 'Mani Khalili';
-        if (emailEl) emailEl.textContent = data.user.email || 'mani.khalili1379@gmail.com';
-        if (avatarEl) avatarEl.textContent = data.user.avatar || 'M';
+        if (nameEl) nameEl.textContent = data.user.name || 'کاربر مهمان';
+        if (emailEl) emailEl.textContent = data.user.email || 'حساب متصل نیست';
+        if (avatarEl) avatarEl.textContent = data.user.avatar || '👤';
 
         const sName = document.getElementById('settingsUserName');
         const sEmail = document.getElementById('settingsUserEmail');
         const sAvatar = document.getElementById('settingsUserAvatar');
-        if (sName) sName.textContent = data.user.name || 'Mani Khalili';
-        if (sEmail) sEmail.textContent = (data.user.email || 'mani.khalili1379@gmail.com').substring(0, 18) + '...';
-        if (sAvatar) sAvatar.textContent = data.user.avatar || 'M';
+        if (sName) sName.textContent = data.user.name || 'کاربر مهمان';
+        if (sEmail) sEmail.textContent = data.user.email ? (data.user.email.length > 20 ? data.user.email.substring(0, 18) + '...' : data.user.email) : 'حساب متصل نیست';
+        if (sAvatar) sAvatar.textContent = data.user.avatar || '👤';
       }
 
       // Populate Projects Tree with Real User Projects

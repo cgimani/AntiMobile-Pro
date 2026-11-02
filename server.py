@@ -54,6 +54,36 @@ def find_agy_binary() -> str:
 
 AGY_BIN = find_agy_binary()
 
+def get_current_user_profile() -> Dict[str, Any]:
+    """Detect currently authenticated Antigravity / Google account dynamically from local system."""
+    token_candidates = [
+        os.path.expanduser('~/.gemini/jetski-standalone-oauth-token'),
+        os.path.expanduser('~/.gemini/oauth_token.json'),
+        os.path.expanduser('~/.config/antigravity/auth.json'),
+    ]
+    for path in token_candidates:
+        if os.path.isfile(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    tok = json.load(f)
+                    email = tok.get('id_token_email') or tok.get('email')
+                    name = tok.get('name') or (email.split('@')[0].capitalize() if email else '')
+                    if email:
+                        return {
+                            "name": name or "کاربر",
+                            "email": email,
+                            "avatar": (name[:1] if name else email[:1]).upper(),
+                            "authenticated": True
+                        }
+            except Exception:
+                pass
+    return {
+        "name": "کاربر مهمان",
+        "email": "وارد نشده (حساب متصل نیست)",
+        "avatar": "👤",
+        "authenticated": False
+    }
+
 # Available models cache
 CACHED_MODELS = [
     {"id": "gemini-3.8-flash-high", "name": "Gemini 3.8 Flash (High)"},
@@ -1728,11 +1758,7 @@ class ProjectsApiHandler(BaseApiHandler):
             "standalone_chats": history_mgr.get_standalone_chats(),
             "active_project_id": history_mgr.data.get("active_project_id"),
             "active_project": active_proj,
-            "user": {
-                "name": "Mani Khalili",
-                "email": "mani.khalili1379@gmail.com",
-                "avatar": "M"
-            }
+            "user": get_current_user_profile()
         }, ensure_ascii=False))
 
     def post(self):
@@ -1927,11 +1953,7 @@ class SettingsApiHandler(BaseApiHandler):
                 "context": context_info,
                 "overrides": active_proj.get("settings", {})
             },
-            "user": {
-                "name": "Mani Khalili",
-                "email": "mani.khalili1379@gmail.com",
-                "avatar": "M"
-            }
+            "user": get_current_user_profile()
         }, ensure_ascii=False))
 
     def post(self):
@@ -2178,10 +2200,11 @@ class AntigravityAccountApiHandler(BaseApiHandler):
                     else:
                         total_response_tokens += int(content_len * 1.3)
 
+        is_logged_in = bool(has_token and email)
         response_data = {
-            "logged_in": bool(has_token or email),
-            "email": email or "mr.x.level.3@gmail.com",
-            "auth_method": auth_method,
+            "logged_in": is_logged_in,
+            "email": email if is_logged_in else "حساب متصل نیست",
+            "auth_method": auth_method if is_logged_in else "offline",
             "models_quota": [
                 {
                     "id": "gemini-3.8-flash-high",
