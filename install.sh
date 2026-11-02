@@ -369,13 +369,59 @@ create_shortcuts() {
     
     cat <<EOF > "$BIN_DIR/$APP_NAME"
 #!/usr/bin/env bash
-cd "$TARGET_DIR" && ./start.sh "\$@"
+cd "$TARGET_DIR"
+case "\${1:-}" in
+    update|-u|--update)
+        ./install.sh --update
+        ;;
+    stop|--stop)
+        ./stop.sh
+        ;;
+    restart|--restart)
+        ./stop.sh && ./start.sh
+        ;;
+    status)
+        if pgrep -f "python3.*server.py" >/dev/null 2>&1; then
+            echo "✅ AntiMobile Pro server is running (PID: \$(pgrep -f "python3.*server.py" | head -n 1))"
+            echo "📱 URL: http://127.0.0.1:7681"
+        else
+            echo "🛑 AntiMobile Pro server is not running."
+            echo "👉 Run 'antimobile' to start."
+        fi
+        ;;
+    *)
+        ./start.sh "\$@"
+        ;;
+esac
 EOF
     chmod +x "$BIN_DIR/$APP_NAME"
 
     cat <<EOF > "$BIN_DIR/$SHORT_NAME"
 #!/usr/bin/env bash
-cd "$TARGET_DIR" && ./start.sh "\$@"
+cd "$TARGET_DIR"
+case "\${1:-}" in
+    update|-u|--update)
+        ./install.sh --update
+        ;;
+    stop|--stop)
+        ./stop.sh
+        ;;
+    restart|--restart)
+        ./stop.sh && ./start.sh
+        ;;
+    status)
+        if pgrep -f "python3.*server.py" >/dev/null 2>&1; then
+            echo "✅ AntiMobile Pro server is running (PID: \$(pgrep -f "python3.*server.py" | head -n 1))"
+            echo "📱 URL: http://127.0.0.1:7681"
+        else
+            echo "🛑 AntiMobile Pro server is not running."
+            echo "👉 Run 'agy-web' to start."
+        fi
+        ;;
+    *)
+        ./start.sh "\$@"
+        ;;
+esac
 EOF
     chmod +x "$BIN_DIR/$SHORT_NAME"
 
@@ -396,6 +442,7 @@ EOF
     fi
 
     echo -e "${GREEN}✅ CLI shortcuts '${APP_NAME}' and '${SHORT_NAME}' created successfully.${NC}"
+    echo -e "   Commands: ${BOLD}${CYAN}antimobile${NC} (start), ${CYAN}antimobile update${NC}, ${CYAN}antimobile stop${NC}, ${CYAN}antimobile status${NC}"
 }
 
 # 5. Perform Install or Update
@@ -510,6 +557,11 @@ update_app() {
     echo -e "${GREEN}================================================================${NC}"
     echo -e "  🚀 Run ${CYAN}antimobile${NC} or ${CYAN}./start.sh${NC} to start."
     echo ""
+
+    if [ "$OS_TYPE" = "termux" ]; then
+        echo -e "${GREEN}🚀 Auto-restarting AntiMobile Pro and opening browser...${NC}"
+        ./start.sh
+    fi
 }
 
 # Uninstall application completely
@@ -693,11 +745,20 @@ else
     check_google_auth
     install_or_update
 
-    # Ask user if they want to launch right away
-    if [ -t 0 ]; then
-        read -p "Would you like to start the server now? (y/N) " -n 1 -r
+    # Auto-start on Termux / Prompt on desktop
+    if [ "$OS_TYPE" = "termux" ]; then
+        echo -e "${GREEN}🚀 Auto-starting AntiMobile Pro and opening browser...${NC}"
+        cd "$TARGET_DIR" && ./start.sh
+    elif [ -t 0 ]; then
+        read -p "Would you like to start the server now? (Y/n) " -n 1 -r
         echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            cd "$TARGET_DIR" && ./start.sh
+        fi
+    elif [ -c /dev/tty ]; then
+        read -p "Would you like to start the server now? (Y/n) " -n 1 -r < /dev/tty || true
+        echo ""
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             cd "$TARGET_DIR" && ./start.sh
         fi
     fi
