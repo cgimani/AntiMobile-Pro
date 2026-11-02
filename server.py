@@ -2371,6 +2371,246 @@ class AntigravityAccountApiHandler(BaseApiHandler):
                 print(f"[WARN] Error updating token: {e}")
         self.get()
 
+class CliLoginManager:
+    """Manages headless background Google OAuth CLI process and user token exchange."""
+    def __init__(self):
+        self.process: Optional[asyncio.subprocess.Process] = None
+        self.auth_url: Optional[str] = None
+        self.state: str = "idle"  # idle, starting, waiting_code, submitting, success, error
+        self.error_message: Optional[str] = None
+        self.logs: List[str] = []
+        self._reader_task: Optional[asyncio.Task] = None
+        self._timeout_task: Optional[asyncio.Task] = None
+        self._tmp_auth_dir: Optional[str] = None
+
+    async def start_login(self) -> Dict[str, Any]:
+        await self.cancel()
+
+        self.state = "starting"
+        self.auth_url = None
+        self.error_message = None
+        self.logs = []
+
+        agy_bin = find_agy_binary()
+        if not os.path.exists(agy_bin):
+            self.state = "error"
+            self.error_message = f"موتور Antigravity در مسیر {agy_bin} یافت نشد."
+            return {"ok": False, "error": self.error_message}
+
+        try:
+            import tempfile
+            self._tmp_auth_dir = tempfile.mkdtemp(prefix='antimobile_oauth_')
+
+            sub_env = os.environ.copy()
+            sub_env['HOME'] = self._tmp_auth_dir
+            sub_env['XDG_CONFIG_HOME'] = os.path.join(self._tmp_auth_dir, '.config')
+            sub_env.pop('GEMINI_API_KEY', None)
+            sub_env.pop('GOOGLE_API_KEY', None)
+            sub_env.pop('GOOGLE_APPLICATION_CREDENTIALS', None)
+
+            self.process = await asyncio.create_subprocess_exec(
+                agy_bin, "-p", "login",
+                env=sub_env,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            url_future = asyncio.get_event_loop().create_future()
+            buffer = ""
+
+            async def read_stream(stream):
+                nonlocal buffer
+                try:
+                    while True:
+                        chunk = await stream.read(512)
+                        if not chunk:
+                            break
+                        text = chunk.decode('utf-8', errors='replace')
+                        buffer += text
+                        self.logs.append(text)
+
+                        if not self.auth_url:
+                            m = re.search(r'(https://accounts\.google\.com/o/oauth2/auth[^\s]+)', buffer)
+                            if m:
+                                self.auth_url = m.group(1)
+                                self.state = "waiting_code"
+                                if not url_future.done():
+                                    url_future.set_result(self.auth_url)
+
+                        if "error" in text.lower() or "failed" in text.lower():
+                            if not self.auth_url:
+                                self.error_message = text.strip()
+                except Exception:
+                    pass
+
+            async def read_both():
+                await asyncio.gather(
+                    read_stream(self.process.stdout),
+                    read_stream(self.process.stderr)
+                )
+
+            self._reader_task = asyncio.create_task(read_both())
+
+            async def auto_timeout():
+                await asyncio.sleep(180)
+                if self.state in ("starting", "waiting_code"):
+                    self.state = "error"
+                    self.error_message = "زمان نشست لاگین به پایان رسید."
+                    await self.cancel()
+
+            self._timeout_task = asyncio.create_task(auto_timeout())
+
+            try:
+                auth_url = await asyncio.wait_for(url_future, timeout=10.0)
+                return {
+                    "ok": True,
+                    "state": self.state,
+                    "auth_url": auth_url
+                }
+            except asyncio.TimeoutError:
+                if self.auth_url:
+                    return {"ok": True, "state": self.state, "auth_url": self.auth_url}
+                return {"ok": False, "state": self.state, "error": self.error_message or "در انتظار دریافت لینک ورود گوگل..."}
+
+        except Exception as e:
+            self.state = "error"
+            self.error_message = f"خطا در اجرای فرآیند لاگین: {e}"
+            return {"ok": False, "error": self.error_message}
+
+    async def submit_code(self, raw_code: str) -> Dict[str, Any]:
+        if not self.process or self.process.returncode is not None:
+            user = get_current_user_profile()
+            if user.get("authenticated"):
+                self.state = "success"
+                return {"ok": True, "state": "success", "user": user}
+            return {"ok": False, "error": "نشست لاگین فعال نیست یا زمان آن به پایان رسیده است. لطفاً مجدداً دکمه ورود را بزنید."}
+
+        clean_code = raw_code.strip()
+        if "code=" in clean_code:
+            m = re.search(r'code=([^&]+)', clean_code)
+            if m:
+                from urllib.parse import unquote
+                clean_code = unquote(m.group(1))
+
+        if not clean_code:
+            return {"ok": False, "error": "کد احراز هویت خالی است."}
+
+        self.state = "submitting"
+        try:
+            self.process.stdin.write(f"{clean_code}\n".encode('utf-8'))
+            await self.process.stdin.drain()
+
+            tmp_token_path = os.path.join(self._tmp_auth_dir, '.gemini', 'jetski-standalone-oauth-token') if self._tmp_auth_dir else ""
+            target_token_path = os.path.expanduser('~/.gemini/jetski-standalone-oauth-token')
+            termux_token_path = '/data/data/com.termux/files/home/.gemini/jetski-standalone-oauth-token'
+
+            for _ in range(24):
+                await asyncio.sleep(0.5)
+                if tmp_token_path and os.path.exists(tmp_token_path):
+                    import shutil
+                    os.makedirs(os.path.dirname(target_token_path), exist_ok=True)
+                    shutil.copy2(tmp_token_path, target_token_path)
+                    if os.path.isdir('/data/data/com.termux/files/home'):
+                        try:
+                            os.makedirs(os.path.dirname(termux_token_path), exist_ok=True)
+                            shutil.copy2(tmp_token_path, termux_token_path)
+                        except Exception:
+                            pass
+
+                    user = get_current_user_profile()
+                    if user.get("authenticated"):
+                        self.state = "success"
+                        await self.cancel()
+                        return {
+                            "ok": True,
+                            "state": "success",
+                            "message": "✓ ورود به حساب گوگل با موفقیت انجام شد!",
+                            "user": user
+                        }
+
+                if os.path.exists(target_token_path):
+                    user = get_current_user_profile()
+                    if user.get("authenticated"):
+                        self.state = "success"
+                        await self.cancel()
+                        return {
+                            "ok": True,
+                            "state": "success",
+                            "message": "✓ ورود به حساب گوگل با موفقیت انجام شد!",
+                            "user": user
+                        }
+
+            user = get_current_user_profile()
+            if user.get("authenticated"):
+                self.state = "success"
+                return {"ok": True, "state": "success", "user": user}
+
+            self.state = "error"
+            return {"ok": False, "error": "کد تایید گوگل توسط سرور پذیرفته نشد یا منقضی شده است. لطفاً مجدداً امتحان کنید."}
+        except Exception as e:
+            self.state = "error"
+            return {"ok": False, "error": f"خطا در ارسال کد تایید: {e}"}
+
+    async def cancel(self, restore_backup=True):
+        if self._timeout_task and not self._timeout_task.done():
+            self._timeout_task.cancel()
+        if self.process and self.process.returncode is None:
+            try:
+                self.process.terminate()
+            except Exception:
+                pass
+        if self._tmp_auth_dir and os.path.exists(self._tmp_auth_dir):
+            try:
+                import shutil
+                shutil.rmtree(self._tmp_auth_dir, ignore_errors=True)
+            except Exception:
+                pass
+        self._tmp_auth_dir = None
+        self.state = "idle"
+        self.auth_url = None
+        self.error_message = None
+
+    def get_status(self) -> Dict[str, Any]:
+        user = get_current_user_profile()
+        if user.get("authenticated") and self.state == "success":
+            return {"ok": True, "state": "success", "user": user, "auth_url": self.auth_url}
+        return {
+            "ok": True,
+            "state": self.state,
+            "auth_url": self.auth_url,
+            "error": self.error_message,
+            "logs": self.logs,
+            "user": user
+        }
+
+cli_login_mgr = CliLoginManager()
+
+class CliLoginStartHandler(BaseApiHandler):
+    async def post(self):
+        res = await cli_login_mgr.start_login()
+        self.finish(json.dumps(res, ensure_ascii=False))
+
+class CliLoginStatusHandler(BaseApiHandler):
+    def get(self):
+        res = cli_login_mgr.get_status()
+        self.finish(json.dumps(res, ensure_ascii=False))
+
+class CliLoginSubmitCodeHandler(BaseApiHandler):
+    async def post(self):
+        try:
+            body = json.loads(self.request.body.decode('utf-8')) if self.request.body else {}
+        except Exception:
+            body = {}
+        code = body.get("code", "")
+        res = await cli_login_mgr.submit_code(code)
+        self.finish(json.dumps(res, ensure_ascii=False))
+
+class CliLoginCancelHandler(BaseApiHandler):
+    async def post(self):
+        await cli_login_mgr.cancel(restore_backup=True)
+        self.finish(json.dumps({"ok": True, "state": "idle"}, ensure_ascii=False))
+
 class ConfigApiHandler(BaseApiHandler):
     def set_default_headers(self):
         self.set_header("Content-Type", "application/json; charset=UTF-8")
@@ -3249,6 +3489,10 @@ def make_app():
 
         # Antigravity Google Account & Quota Endpoints
         (r"/api/antigravity/account", AntigravityAccountApiHandler),
+        (r"/api/auth/cli-login/start", CliLoginStartHandler),
+        (r"/api/auth/cli-login/status", CliLoginStatusHandler),
+        (r"/api/auth/cli-login/submit-code", CliLoginSubmitCodeHandler),
+        (r"/api/auth/cli-login/cancel", CliLoginCancelHandler),
 
         # Projects & Settings Endpoints
         (r"/api/projects", ProjectsApiHandler),

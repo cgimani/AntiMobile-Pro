@@ -4010,6 +4010,154 @@
     document.body.removeChild(ta);
   }
 
+  // =========================================================================
+  // In-App Background Google CLI OAuth Bridge Flow
+  // =========================================================================
+  let cliAuthUrl = '';
+  let cliLoginPollTimer = null;
+
+  async function startCliLoginFlow() {
+    const idleBox = document.getElementById('cliLoginIdleBox');
+    const loadingBox = document.getElementById('cliLoginLoadingBox');
+    const activeBox = document.getElementById('cliLoginActiveBox');
+
+    if (idleBox) idleBox.style.display = 'none';
+    if (loadingBox) loadingBox.style.display = 'block';
+    if (activeBox) activeBox.style.display = 'none';
+
+    try {
+      showToast('در حال اجرای نشست ورود در پس‌زمینه...', 'info');
+      const res = await fetch('/api/auth/cli-login/start', { method: 'POST' });
+      const data = await res.json();
+
+      if (data.ok && data.auth_url) {
+        cliAuthUrl = data.auth_url;
+        setupCliLoginActiveUI(data.auth_url);
+      } else if (data.ok && data.state === 'success') {
+        showToast('✓ حساب گوگل متصل شد.');
+        resetCliLoginUI();
+        await refreshAccountStatus();
+      } else {
+        pollCliLoginStatus();
+      }
+    } catch (e) {
+      showToast('خطا در شروع نشست ورود گوگل.', 'error');
+      resetCliLoginUI();
+    }
+  }
+
+  function setupCliLoginActiveUI(url) {
+    const loadingBox = document.getElementById('cliLoginLoadingBox');
+    const activeBox = document.getElementById('cliLoginActiveBox');
+    const linkBtn = document.getElementById('btnOpenAuthUrlLink');
+    const codeInput = document.getElementById('inputCliAuthCode');
+
+    if (loadingBox) loadingBox.style.display = 'none';
+    if (activeBox) activeBox.style.display = 'block';
+    if (linkBtn) linkBtn.href = url;
+    if (codeInput) {
+      codeInput.value = '';
+      codeInput.focus();
+    }
+  }
+
+  function pollCliLoginStatus() {
+    let attempts = 0;
+    if (cliLoginPollTimer) clearInterval(cliLoginPollTimer);
+    cliLoginPollTimer = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch('/api/auth/cli-login/status');
+        const data = await res.json();
+        if (data.auth_url) {
+          clearInterval(cliLoginPollTimer);
+          cliAuthUrl = data.auth_url;
+          setupCliLoginActiveUI(data.auth_url);
+        } else if (data.state === 'error' || attempts > 15) {
+          clearInterval(cliLoginPollTimer);
+          showToast(data.error || 'خطا در دریافت لینک لاگین.', 'error');
+          resetCliLoginUI();
+        }
+      } catch (e) {
+        if (attempts > 10) {
+          clearInterval(cliLoginPollTimer);
+          resetCliLoginUI();
+        }
+      }
+    }, 1000);
+  }
+
+  function copyGoogleAuthUrl() {
+    if (!cliAuthUrl) return;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(cliAuthUrl).then(() => {
+        showToast('✓ لینک ورود در کلیپ‌بورد کپی شد.');
+      }).catch(() => fallbackCopyText(cliAuthUrl));
+    } else {
+      fallbackCopyText(cliAuthUrl);
+    }
+  }
+
+  async function submitCliAuthCode() {
+    const input = document.getElementById('inputCliAuthCode');
+    const btn = document.getElementById('btnSubmitAuthCode');
+    if (!input) return;
+    const code = input.value.trim();
+    if (!code) {
+      showToast('لطفاً کد تایید گوگل را وارد کنید.', 'warn');
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'در حال اعتبارسنجی...';
+    }
+
+    try {
+      showToast('در حال اعتبارسنجی کد با سرورهای گوگل...', 'info');
+      const res = await fetch('/api/auth/cli-login/submit-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        showToast(data.message || '✓ ورود موفقیت‌آمیز بود! حساب شما متصل شد.');
+        resetCliLoginUI();
+        await refreshAccountStatus(true);
+      } else {
+        showToast(data.error || 'کد واردشده معتبر نیست.', 'error');
+      }
+    } catch (e) {
+      showToast('خطا در برقراری ارتباط با سرور.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '✓ تایید و فعال‌سازی';
+      }
+    }
+  }
+
+  async function cancelCliLoginFlow() {
+    if (cliLoginPollTimer) clearInterval(cliLoginPollTimer);
+    try {
+      await fetch('/api/auth/cli-login/cancel', { method: 'POST' });
+    } catch (e) {}
+    resetCliLoginUI();
+    showToast('نشست ورود لغو شد.');
+  }
+
+  function resetCliLoginUI() {
+    if (cliLoginPollTimer) clearInterval(cliLoginPollTimer);
+    const idleBox = document.getElementById('cliLoginIdleBox');
+    const loadingBox = document.getElementById('cliLoginLoadingBox');
+    const activeBox = document.getElementById('cliLoginActiveBox');
+    if (idleBox) idleBox.style.display = 'block';
+    if (loadingBox) loadingBox.style.display = 'none';
+    if (activeBox) activeBox.style.display = 'none';
+  }
+
   let audioToneEnabled = false;
 
   function playCompletionSound() {
@@ -4241,6 +4389,10 @@
   window.saveCustomOAuthToken = saveCustomOAuthToken;
   window.logoutAccount = logoutAccount;
   window.copyCliAuthCommand = copyCliAuthCommand;
+  window.startCliLoginFlow = startCliLoginFlow;
+  window.copyGoogleAuthUrl = copyGoogleAuthUrl;
+  window.submitCliAuthCode = submitCliAuthCode;
+  window.cancelCliLoginFlow = cancelCliLoginFlow;
 
   // Helper to bind guaranteed tap/click events
   function bindAction(el, handler) {
