@@ -56,10 +56,12 @@ fi
 if ! command -v agy >/dev/null 2>&1 && [ ! -f "$HOME/.local/bin/agy" ] && [ ! -f "$PREFIX/bin/agy" ] && [ ! -f "/data/data/com.termux/files/usr/bin/agy" ]; then
     echo -e "${YELLOW}⚡ Antigravity engine (agy) not found. Auto-installing...${NC}"
     if [ -n "$PREFIX" ] && [[ "$PREFIX" == *"com.termux"* ]]; then
-        pkg install -y glibc-repo 2>/dev/null || true
-        pkg install -y glibc ca-certificates resolv-conf tar curl 2>/dev/null || true
+        dpkg_opts="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+        pkg install -y $dpkg_opts glibc-repo 2>/dev/null || true
+        apt-get update -y >/dev/null 2>&1 || pkg update -y >/dev/null 2>&1 || true
+        pkg install -y $dpkg_opts glibc ca-certificates resolv-conf tar coreutils curl 2>/dev/null || true
         if ! grep -q "atomics" /proc/cpuinfo 2>/dev/null; then
-            pkg install -y qemu-user-aarch64 2>/dev/null || true
+            pkg install -y $dpkg_opts qemu-user-aarch64 2>/dev/null || true
         fi
         curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash 2>/dev/null || true
     fi

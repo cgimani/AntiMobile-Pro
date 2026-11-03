@@ -37,7 +37,7 @@ import tornado.websocket
 import tornado.ioloop
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
-APP_VERSION = "3.2.0"
+APP_VERSION = "3.2.1"
 PORT = int(os.environ.get('PORT', 7681))
 HOST = os.environ.get('HOST', '0.0.0.0')
 HISTORY_FILE = os.path.join(WORKSPACE_DIR, 'chat_history.json')
@@ -2568,7 +2568,9 @@ class CliLoginManager:
 
             is_termux = os.path.isdir('/data/data/com.termux/files/usr') or 'com.termux' in os.environ.get('PREFIX', '')
             install_cmd = (
-                "pkg install -y glibc-repo 2>/dev/null; pkg install -y glibc ca-certificates resolv-conf tar curl 2>/dev/null; "
+                "pkg install -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' glibc-repo 2>/dev/null; "
+                "apt-get update -y >/dev/null 2>&1 || pkg update -y >/dev/null 2>&1; "
+                "pkg install -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' glibc ca-certificates resolv-conf tar coreutils curl 2>/dev/null; "
                 "curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
                 if is_termux else
                 "curl -fsSL https://antigravity.google/cli/install.sh | bash"
@@ -2591,7 +2593,7 @@ class CliLoginManager:
 
         if not os.path.exists(agy_bin):
             self.state = "error"
-            termux_cmd = "pkg install -y glibc-repo && pkg install -y glibc ca-certificates resolv-conf && curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
+            termux_cmd = "pkg install -y glibc-repo && apt-get update && pkg install -y glibc ca-certificates resolv-conf && curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
             self.error_message = (
                 f"موتور اصلی Antigravity CLI روی ترموکس نصب نشده است.\n"
                 f"لطفاً دستور زیر را در ترموکس اجرا کنید تا نصب شود:\n{termux_cmd}"
@@ -3481,7 +3483,8 @@ class HealthApiHandler(tornado.web.RequestHandler):
 
     def get(self):
         internet_ok = is_internet_available(timeout=0.6)
-        agy_exists = os.path.exists(AGY_BIN)
+        agy_bin = find_agy_binary()
+        agy_exists = os.path.exists(agy_bin)
         procs = get_system_processes()
 
         self.write(json.dumps({
@@ -3527,6 +3530,110 @@ class RestartApiHandler(BaseApiHandler):
         self.write(json.dumps({
             "success": True,
             "message": f"موتور Antigravity مجدداً راه‌اندازی گردید ({killed_count} پردازه متوقف شد)."
+        }, ensure_ascii=False))
+
+class SystemUpdateApiHandler(BaseApiHandler):
+    def set_default_headers(self):
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        agy_bin = find_agy_binary()
+        agy_ready = bool(agy_bin and os.path.isfile(agy_bin) and os.access(agy_bin, os.X_OK))
+        is_termux = os.path.isdir('/data/data/com.termux/files/usr') or 'com.termux' in os.environ.get('PREFIX', '')
+        glibc_loader = '/data/data/com.termux/files/usr/glibc/lib/ld-linux-aarch64.so.1'
+        glibc_ready = (not is_termux) or os.path.isfile(glibc_loader)
+
+        self.write(json.dumps({
+            "ok": True,
+            "version": APP_VERSION,
+            "is_termux": is_termux,
+            "agy_ready": agy_ready,
+            "agy_bin": agy_bin,
+            "glibc_ready": glibc_ready,
+            "can_update": os.path.isdir(os.path.join(WORKSPACE_DIR, '.git'))
+        }, ensure_ascii=False))
+
+    async def post(self):
+        logs = []
+        is_termux = os.path.isdir('/data/data/com.termux/files/usr') or 'com.termux' in os.environ.get('PREFIX', '')
+        
+        # 1. Git pull / reset to origin main
+        if os.path.isdir(os.path.join(WORKSPACE_DIR, '.git')):
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    "git fetch origin main && git reset --hard origin/main",
+                    cwd=WORKSPACE_DIR,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=45.0)
+                logs.append("کد برنامه با موفقیت از مخزن گیت به آخرین نسخه origin/main به‌روزرسانی شد.")
+            except Exception as e:
+                logs.append(f"به‌روزرسانی گیت: {e}")
+
+        # 2. Termux glibc & system libraries self-healing
+        if is_termux:
+            glibc_loader = '/data/data/com.termux/files/usr/glibc/lib/ld-linux-aarch64.so.1'
+            if not os.path.isfile(glibc_loader):
+                try:
+                    fix_glibc_cmd = (
+                        "pkg install -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' glibc-repo 2>/dev/null; "
+                        "apt-get update -y >/dev/null 2>&1 || pkg update -y >/dev/null 2>&1; "
+                        "pkg install -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' glibc ca-certificates resolv-conf tar coreutils curl 2>/dev/null"
+                    )
+                    proc = await asyncio.create_subprocess_shell(
+                        fix_glibc_cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.STDOUT
+                    )
+                    await asyncio.wait_for(proc.communicate(), timeout=90.0)
+                    logs.append("کتابخانه Termux glibc و مخازن بازسازی شدند.")
+                except Exception as e:
+                    logs.append(f"عیب‌یابی glibc: {e}")
+
+        # 3. Antigravity CLI binary self-healing
+        agy_bin = find_agy_binary()
+        if not (agy_bin and os.path.isfile(agy_bin) and os.access(agy_bin, os.X_OK)):
+            try:
+                install_cmd = (
+                    "pkg install -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' glibc-repo 2>/dev/null; "
+                    "apt-get update -y >/dev/null 2>&1 || pkg update -y >/dev/null 2>&1; "
+                    "pkg install -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' glibc ca-certificates resolv-conf tar coreutils curl 2>/dev/null; "
+                    "curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
+                    if is_termux else
+                    "curl -fsSL https://antigravity.google/cli/install.sh | bash"
+                )
+                proc = await asyncio.create_subprocess_shell(
+                    install_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
+                )
+                await asyncio.wait_for(proc.communicate(), timeout=180.0)
+                logs.append("موتور Antigravity CLI نصب شد.")
+            except Exception as e:
+                logs.append(f"نصب موتور agy: {e}")
+
+        # 4. File permissions & terminal shortcuts
+        try:
+            for fname in ['start.sh', 'stop.sh', 'server.py', 'install.sh']:
+                fpath = os.path.join(WORKSPACE_DIR, fname)
+                if os.path.isfile(fpath):
+                    os.chmod(fpath, 0o755)
+            logs.append("مجوز فایل‌های اجرایی تنظیم شد.")
+        except Exception:
+            pass
+
+        final_agy = find_agy_binary()
+        agy_ready = bool(final_agy and os.path.isfile(final_agy) and os.access(final_agy, os.X_OK))
+
+        self.write(json.dumps({
+            "ok": True,
+            "version": APP_VERSION,
+            "agy_ready": agy_ready,
+            "agy_bin": final_agy,
+            "logs": logs,
+            "message": "به‌روزرسانی و عیب‌یابی خودکار سامانه با موفقیت تکمیل شد."
         }, ensure_ascii=False))
 
 # WebSocket Handler
@@ -3794,9 +3901,10 @@ def make_app():
         (r"/api/file-save", FileSaveApiHandler),
         (r"/api/file-download", FileDownloadHandler),
         
-        # Feature 5: Health & Restart Endpoints
+        # Feature 5: Health & Restart & System Update Endpoints
         (r"/api/health", HealthApiHandler),
         (r"/api/restart", RestartApiHandler),
+        (r"/api/system/update", SystemUpdateApiHandler),
         
         # WebSocket
         (r"/ws", ChatWebSocket),

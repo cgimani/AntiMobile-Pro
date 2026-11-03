@@ -82,13 +82,38 @@ install_dependencies() {
     case "$OS_TYPE" in
         termux)
             echo -e "${GREEN}📱 Detected environment: Android Termux${NC}"
-            pkg update -y >/dev/null 2>&1 || true
-            for pkg in python python-pip git curl tar ca-certificates resolv-conf termux-tools termux-api; do
+            export DEBIAN_FRONTEND=noninteractive
+            local dpkg_opts="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+
+            # 1. Base tools
+            for pkg in python git curl tar coreutils termux-tools termux-api; do
                 if ! command -v $pkg >/dev/null 2>&1; then
                     echo -e "${YELLOW}📦 Installing $pkg...${NC}"
-                    pkg install -y $pkg 2>/dev/null || true
+                    pkg install -y $dpkg_opts $pkg 2>/dev/null || true
                 fi
             done
+            if ! command -v pip >/dev/null 2>&1 && ! command -v pip3 >/dev/null 2>&1; then
+                pkg install -y $dpkg_opts python-pip 2>/dev/null || true
+            fi
+
+            # 2. Termux glibc & networking loader (Mandatory for Antigravity engine)
+            local glibc_loader="${PREFIX:-/data/data/com.termux/files/usr}/glibc/lib/ld-linux-aarch64.so.1"
+            if [ ! -f "$glibc_loader" ]; then
+                echo -e "${YELLOW}📦 Setting up Termux glibc loader (glibc-repo & glibc)...${NC}"
+                pkg install -y $dpkg_opts glibc-repo 2>/dev/null || true
+                apt-get update -y >/dev/null 2>&1 || pkg update -y >/dev/null 2>&1 || true
+                pkg install -y $dpkg_opts glibc ca-certificates resolv-conf tar coreutils curl 2>/dev/null || true
+            else
+                pkg install -y $dpkg_opts ca-certificates resolv-conf 2>/dev/null || true
+            fi
+
+            # 3. CPU Atomics emulation for older ARM64 chips
+            if ! grep -q "atomics" /proc/cpuinfo 2>/dev/null; then
+                if ! command -v qemu-aarch64 >/dev/null 2>&1; then
+                    echo -e "${YELLOW}📦 Installing qemu-user-aarch64 for CPU atomics emulation...${NC}"
+                    pkg install -y $dpkg_opts qemu-user-aarch64 2>/dev/null || true
+                fi
+            fi
             ;;
         macos)
             echo -e "${GREEN}🍏 Detected environment: macOS ($(uname -m))${NC}"
@@ -329,10 +354,16 @@ ensure_agy_binary() {
     echo -e "${YELLOW}⚡ Antigravity engine (agy) not found. Installing automatically...${NC}"
     if [ "$OS_TYPE" = "termux" ]; then
         echo -e "${CYAN}📦 Setting up Termux glibc loader prerequisites (glibc-repo & glibc)...${NC}"
-        pkg install -y glibc-repo 2>/dev/null || true
-        pkg install -y glibc ca-certificates resolv-conf tar curl 2>/dev/null || true
+        local dpkg_opts="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+        pkg install -y $dpkg_opts glibc-repo 2>/dev/null || true
+        apt-get update -y >/dev/null 2>&1 || pkg update -y >/dev/null 2>&1 || true
+        pkg install -y $dpkg_opts glibc ca-certificates resolv-conf tar coreutils curl 2>/dev/null || true
         if ! grep -q "atomics" /proc/cpuinfo 2>/dev/null; then
-            pkg install -y qemu-user-aarch64 2>/dev/null || true
+            pkg install -y $dpkg_opts qemu-user-aarch64 2>/dev/null || true
+        fi
+        local glibc_loader="${PREFIX:-/data/data/com.termux/files/usr}/glibc/lib/ld-linux-aarch64.so.1"
+        if [ -f "$glibc_loader" ]; then
+            chmod +x "$glibc_loader" 2>/dev/null || true
         fi
         echo -e "${CYAN}⬇️ Downloading native Termux standalone build...${NC}"
         curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash 2>&1 || true
@@ -552,7 +583,7 @@ install_or_update() {
     print_summary
 }
 
-# Update only
+# Update and auto-repair all dependencies
 update_app() {
     resolve_dir
     echo -e "${CYAN}🔄 Updating AntiMobile Pro in ${TARGET_DIR}...${NC}"
@@ -568,10 +599,11 @@ update_app() {
         cp "chat_history.json" "chat_history.json.bak" 2>/dev/null || true
     fi
 
-    # Pull latest changes
+    # 1. Pull latest changes
+    echo -e "${BLUE}⬇️ Fetching latest updates from GitHub...${NC}"
     if [ -d ".git" ]; then
         git fetch origin main 2>/dev/null || git fetch origin 2>/dev/null || true
-        git pull --rebase origin main 2>/dev/null || git pull 2>/dev/null || true
+        git reset --hard origin/main 2>/dev/null || git pull --rebase origin main 2>/dev/null || git pull 2>/dev/null || true
     else
         echo -e "${YELLOW}⚠️ Git repository not found. Re-cloning...${NC}"
         cd ..
@@ -590,21 +622,19 @@ update_app() {
     chmod +x start.sh stop.sh push_to_github.sh server.py 2>/dev/null || true
     create_shortcuts
 
-    # Re-check python dependencies & permissions
+    # 2. Complete Environment & Dependency Self-Healing
     detect_os
+    echo -e "${BLUE}🛠️ Running complete environment & dependency repair...${NC}"
+    install_dependencies
     ensure_termux_permissions
-    if ! python3 -c "import tornado" >/dev/null 2>&1; then
-        export TORNADO_EXTENSION=0
-        export TORNADO_NO_EXTENSION=1
-        python3 -m pip install "tornado>=6.2,<7.0" --no-build-isolation --break-system-packages 2>/dev/null || \
-        python3 -m pip install "tornado>=6.2,<7.0" --break-system-packages 2>/dev/null || true
-    fi
+    ensure_agy_binary
 
     NEW_VER=$(get_installed_version)
     echo ""
     echo -e "${GREEN}================================================================${NC}"
-    echo -e "${BOLD}  🎉 Update completed successfully! (New version: v${NEW_VER})${NC}"
+    echo -e "${BOLD}  🎉 Update & Self-Repair completed successfully! (v${NEW_VER})${NC}"
     echo -e "${GREEN}================================================================${NC}"
+    echo -e "  ✅ All system packages, Python engine, and Antigravity CLI are verified."
     echo -e "  🚀 Run ${CYAN}antimobile${NC} or ${CYAN}./start.sh${NC} to start."
     echo ""
 

@@ -3878,6 +3878,7 @@
       console.warn('[Settings] Failed to fetch server settings:', e);
     }
     refreshAccountStatus();
+    checkSystemUpdateStatus();
   }
 
   function closeSettingsModal() {
@@ -3901,6 +3902,8 @@
     } else if (tabName === 'account') {
       refreshAccountStatus();
       checkCliLoginSession();
+    } else if (tabName === 'general') {
+      checkSystemUpdateStatus();
     }
   }
 
@@ -4553,7 +4556,100 @@
     }
   }
 
+  // System Update & Self-Repair Actions
+  async function checkSystemUpdateStatus() {
+    const desc = document.getElementById('systemVersionDesc');
+    const badge = document.getElementById('systemStatusBadge');
+    if (!desc) return;
+    try {
+      const res = await fetch('/api/system/update');
+      if (res.ok) {
+        const data = await res.json();
+        const agyStatus = data.agy_ready ? '✅ موتور آماده' : '⚠️ موتور CLI یافت نشد';
+        const glibcStatus = data.is_termux ? (data.glibc_ready ? ' | glibc: OK' : ' | ❌ glibc ناقص') : '';
+        desc.textContent = `نسخه فعلی: v${data.version || '3.2.1'} | ${agyStatus}${glibcStatus}`;
+        if (badge) {
+          if (data.agy_ready && data.glibc_ready) {
+            badge.className = 'agy-status-pill verified';
+            badge.textContent = 'بروز و آماده';
+          } else {
+            badge.className = 'agy-status-pill warning';
+            badge.textContent = 'نیاز به عیب‌یابی';
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Update] Failed to check status:', e);
+    }
+  }
+
+  async function triggerSystemUpdate() {
+    const btn = document.getElementById('btnSystemUpdate');
+    const logBox = document.getElementById('updateLogBox');
+    const badge = document.getElementById('systemStatusBadge');
+    const desc = document.getElementById('systemVersionDesc');
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `
+        <svg class="spin-anim" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+          <path d="M12 2a10 10 0 0 1 10 10"></path>
+        </svg>
+        در حال به‌روزرسانی و عیب‌یابی خودکار سامانه...
+      `;
+    }
+    if (logBox) {
+      logBox.style.display = 'block';
+      logBox.textContent = '⏳ در حال شروع عیب‌یابی خودکار، بررسی گیت و بسته‌های سیستم...\n';
+    }
+    showToast('در حال به‌روزرسانی و عیب‌یابی خودکار سامانه... لطفاً صبور باشید.', 'info', 6000);
+
+    try {
+      const res = await fetch('/api/system/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+
+      if (logBox && Array.isArray(data.logs)) {
+        logBox.textContent = data.logs.join('\n') + '\n\n' + (data.message || 'پایان عملیات.');
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+
+      if (data.ok) {
+        showToast(data.message || 'سامانه با موفقیت به‌روزرسانی و عیب‌یابی شد!', 'success', 5000);
+        if (badge) {
+          badge.className = 'agy-status-pill verified';
+          badge.textContent = 'بروز و آماده';
+        }
+        if (desc) {
+          desc.textContent = `نسخه فعلی: v${data.version || '3.2.1'} | ✅ موتور آماده (${data.agy_bin || 'agy'})`;
+        }
+      } else {
+        showToast(data.error || 'خطا در عملیات به‌روزرسانی.', 'error', 6000);
+      }
+    } catch (e) {
+      console.error('[Update] Error:', e);
+      if (logBox) logBox.textContent += '\n❌ خطا در ارتباط با سرور: ' + e.message;
+      showToast('خطا در ارتباط با سرور: ' + e.message, 'error', 6000);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+          بررسی، به‌روزرسانی و عیب‌یابی خودکار سامانه
+        `;
+      }
+      checkSystemUpdateStatus();
+    }
+  }
+
   // Expose global window actions for direct HTML onclick triggers
+  window.triggerSystemUpdate = triggerSystemUpdate;
+  window.checkSystemUpdateStatus = checkSystemUpdateStatus;
   window.toggleModelDropdown = toggleModelDropdown;
   window.togglePolicyDropdown = togglePolicyDropdown;
   window.selectModel = selectModel;
