@@ -51,18 +51,20 @@ def find_agy_binary() -> str:
     which_path = shutil.which('agy')
     if which_path:
         return which_path
+    prefix = os.environ.get('PREFIX', '/data/data/com.termux/files/usr')
     candidates = [
+        os.path.join(prefix, 'bin', 'agy'),
+        '/data/data/com.termux/files/usr/bin/agy',
+        '/data/data/com.termux/files/home/.local/bin/agy',
         os.path.expanduser('~/.local/bin/agy'),
         os.path.expanduser('~/.gemini/antigravity-cli/bin/agy'),
-        '/data/data/com.termux/files/home/.local/bin/agy',
-        '/data/data/com.termux/files/usr/bin/agy',
         '/usr/local/bin/agy',
         '/opt/homebrew/bin/agy'
     ]
     for c in candidates:
         if os.path.isfile(c) and os.access(c, os.X_OK):
             return c
-    return os.path.expanduser('~/.local/bin/agy')
+    return os.path.join(prefix, 'bin', 'agy') if os.path.isdir(prefix) else os.path.expanduser('~/.local/bin/agy')
 
 AGY_BIN = find_agy_binary()
 
@@ -1083,9 +1085,26 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
     effort = chat.get("effort") or history_mgr.data.get("default_effort", "high")
     mode = chat.get("mode") or history_mgr.data.get("default_mode", "auto")
 
+    agy_bin = find_agy_binary()
+    if not os.path.exists(agy_bin):
+        termux_cmd = "curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
+        err_msg = (
+            "⚠️ **موتور هوش مصنوعی Antigravity CLI روی سیستم یافت نشد.**\n\n"
+            f"برای فعال‌سازی و شروع چت، لطفاً دستور زیر را در ترموکس اجرا کنید:\n\n"
+            f"```bash\n{termux_cmd}\n```"
+        )
+        msg_obj = history_mgr.add_message(chat_id, "model", err_msg)
+        broadcast({
+            "type": "turn_complete",
+            "chat_id": chat_id,
+            "content": err_msg,
+            "message": msg_obj
+        })
+        return
+
     # Build command arguments for agy
     cmd = [
-        find_agy_binary(),
+        agy_bin,
         "-p", prompt,
         "--output-format", "stream-json"
     ]
@@ -2538,9 +2557,51 @@ class CliLoginManager:
 
         agy_bin = find_agy_binary()
         if not os.path.exists(agy_bin):
+            print(f"[AUTH] agy binary not found at {agy_bin}. Attempting auto-installation...")
+            self.state = "installing_engine"
+            self.logs.append("موتور Antigravity روی سیستم یافت نشد. در حال دانلود و نصب خودکار...")
+            broadcast({
+                "type": "cli_login_state",
+                "state": "installing_engine",
+                "message": "در حال دانلود و نصب خودکار موتور Antigravity CLI روی ترموکس... لطفاً چند لحظه شکیبا باشید."
+            })
+
+            is_termux = os.path.isdir('/data/data/com.termux/files/usr') or 'com.termux' in os.environ.get('PREFIX', '')
+            install_cmd = (
+                "curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
+                if is_termux else
+                "curl -fsSL https://antigravity.google/cli/install.sh | bash"
+            )
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    install_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+                if stdout:
+                    for line in stdout.decode('utf-8', errors='ignore').splitlines()[-8:]:
+                        self.logs.append(line)
+            except Exception as e:
+                print(f"[AUTH] Auto-install agy failed: {e}")
+                self.logs.append(f"خطا در نصب خودکار: {str(e)}")
+
+            agy_bin = find_agy_binary()
+
+        if not os.path.exists(agy_bin):
             self.state = "error"
-            self.error_message = f"موتور Antigravity در مسیر {agy_bin} یافت نشد."
-            return {"ok": False, "error": self.error_message}
+            termux_cmd = "curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
+            self.error_message = (
+                f"موتور اصلی Antigravity CLI روی ترموکس نصب نشده است.\n"
+                f"لطفاً دستور زیر را در ترموکس اجرا کنید تا نصب شود:\n{termux_cmd}"
+            )
+            broadcast({
+                "type": "cli_login_state",
+                "state": "error",
+                "error": self.error_message,
+                "install_command": termux_cmd
+            })
+            return {"ok": False, "error": self.error_message, "install_command": termux_cmd, "state": "error"}
 
         try:
             import tempfile

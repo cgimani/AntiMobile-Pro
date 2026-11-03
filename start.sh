@@ -52,6 +52,14 @@ if ! python3 -c "import tornado" >/dev/null 2>&1; then
     python3 -m pip install "tornado>=6.2,<7.0" --break-system-packages 2>/dev/null || true
 fi
 
+# 2.10 Self-healing check: ensure Antigravity CLI binary exists
+if ! command -v agy >/dev/null 2>&1 && [ ! -f "$HOME/.local/bin/agy" ] && [ ! -f "$PREFIX/bin/agy" ] && [ ! -f "/data/data/com.termux/files/usr/bin/agy" ]; then
+    echo -e "${YELLOW}⚡ Antigravity engine (agy) not found. Auto-installing...${NC}"
+    if [ -n "$PREFIX" ] && [[ "$PREFIX" == *"com.termux"* ]]; then
+        curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash 2>/dev/null || true
+    fi
+fi
+
 # 3. Start Tornado Server in background
 nohup python3 "$DIR/server.py" > "$DIR/server.log" 2>&1 &
 SERVER_PID=$!

@@ -305,24 +305,58 @@ ensure_termux_permissions() {
     echo ""
 }
 
-# 3. Check for Antigravity Binary
-check_agy_binary() {
+# 3. Check and Automatically Install Antigravity Binary
+ensure_agy_binary() {
     echo -e "${BLUE}🧠 Checking Antigravity CLI binary (agy)...${NC}"
     AGY_PATH=""
     if command -v agy >/dev/null 2>&1; then
         AGY_PATH=$(command -v agy)
+    elif [ -f "$PREFIX/bin/agy" ]; then
+        AGY_PATH="$PREFIX/bin/agy"
+    elif [ -f "/data/data/com.termux/files/usr/bin/agy" ]; then
+        AGY_PATH="/data/data/com.termux/files/usr/bin/agy"
     elif [ -f "$HOME/.local/bin/agy" ]; then
         AGY_PATH="$HOME/.local/bin/agy"
     elif [ -f "$HOME/.gemini/antigravity-cli/bin/agy" ]; then
         AGY_PATH="$HOME/.gemini/antigravity-cli/bin/agy"
     fi
 
-    if [ -n "$AGY_PATH" ]; then
+    if [ -n "$AGY_PATH" ] && [ -x "$AGY_PATH" ]; then
         echo -e "${GREEN}✅ Antigravity engine found: ${AGY_PATH}${NC}"
+        return 0
+    fi
+
+    echo -e "${YELLOW}⚡ Antigravity engine (agy) not found. Installing automatically...${NC}"
+    if [ "$OS_TYPE" = "termux" ]; then
+        echo -e "${CYAN}⬇️ Downloading native Termux standalone build...${NC}"
+        curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash 2>&1 || true
     else
-        echo -e "${YELLOW}⚠️ Notice: 'agy' binary was not found in standard system PATH.${NC}"
-        echo -e "${CYAN}💡 After installation, you can install the official agy binary using:${NC}"
-        echo -e "   curl -sL https://antigravity.google/install.sh | bash"
+        echo -e "${CYAN}⬇️ Downloading official Antigravity CLI...${NC}"
+        curl -fsSL https://antigravity.google/cli/install.sh | bash 2>&1 || true
+    fi
+
+    if command -v agy >/dev/null 2>&1; then
+        AGY_PATH=$(command -v agy)
+    elif [ -f "$PREFIX/bin/agy" ]; then
+        AGY_PATH="$PREFIX/bin/agy"
+    elif [ -f "/data/data/com.termux/files/usr/bin/agy" ]; then
+        AGY_PATH="/data/data/com.termux/files/usr/bin/agy"
+    elif [ -f "$HOME/.local/bin/agy" ]; then
+        AGY_PATH="$HOME/.local/bin/agy"
+    fi
+
+    if [ -n "$AGY_PATH" ]; then
+        echo -e "${GREEN}✅ Antigravity engine installed successfully: ${AGY_PATH}${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}⚠️ Notice: Automated agy installation could not finish right now.${NC}"
+        if [ "$OS_TYPE" = "termux" ]; then
+            echo -e "   You can install it anytime in Termux using:"
+            echo -e "   ${CYAN}curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash${NC}"
+        else
+            echo -e "   ${CYAN}curl -fsSL https://antigravity.google/cli/install.sh | bash${NC}"
+        fi
+        return 1
     fi
 }
 
@@ -463,7 +497,7 @@ install_or_update() {
     resolve_dir
     detect_os
     install_dependencies
-    check_agy_binary
+    ensure_agy_binary
     check_google_auth
 
     if [ "$IS_IN_PLACE" = true ]; then
@@ -751,7 +785,7 @@ if is_installed && [ -t 0 ]; then
 else
     detect_os
     install_dependencies
-    check_agy_binary
+    ensure_agy_binary
     check_google_auth
     install_or_update
 

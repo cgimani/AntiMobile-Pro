@@ -4269,7 +4269,12 @@
           cliAuthUrl = data.auth_url;
           setupCliLoginActiveUI(data.auth_url);
           showToast('لینک ورود گوگل آماده شد.', 'success');
-        } else if (data.state === 'error' || attempts > 18) {
+        } else if (data.state === 'installing_engine') {
+          const loadingDesc = document.querySelector('#cliLoginLoadingBox .login-card-desc');
+          if (loadingDesc) {
+            loadingDesc.textContent = data.message || 'در حال دانلود و نصب خودکار موتور Antigravity CLI روی ترموکس... لطفاً چند ثانیه شکیبا باشید.';
+          }
+        } else if (data.state === 'error' || attempts > 100) {
           clearInterval(cliLoginPollTimer);
           showToast(data.error || 'خطا در دریافت لینک لاگین.', 'error');
           resetCliLoginUI();
