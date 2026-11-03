@@ -83,7 +83,7 @@ install_dependencies() {
         termux)
             echo -e "${GREEN}📱 Detected environment: Android Termux${NC}"
             pkg update -y >/dev/null 2>&1 || true
-            for pkg in python python-pip git curl termux-tools termux-api; do
+            for pkg in python python-pip git curl tar ca-certificates resolv-conf termux-tools termux-api; do
                 if ! command -v $pkg >/dev/null 2>&1; then
                     echo -e "${YELLOW}📦 Installing $pkg...${NC}"
                     pkg install -y $pkg 2>/dev/null || true
@@ -328,6 +328,12 @@ ensure_agy_binary() {
 
     echo -e "${YELLOW}⚡ Antigravity engine (agy) not found. Installing automatically...${NC}"
     if [ "$OS_TYPE" = "termux" ]; then
+        echo -e "${CYAN}📦 Setting up Termux glibc loader prerequisites (glibc-repo & glibc)...${NC}"
+        pkg install -y glibc-repo 2>/dev/null || true
+        pkg install -y glibc ca-certificates resolv-conf tar curl 2>/dev/null || true
+        if ! grep -q "atomics" /proc/cpuinfo 2>/dev/null; then
+            pkg install -y qemu-user-aarch64 2>/dev/null || true
+        fi
         echo -e "${CYAN}⬇️ Downloading native Termux standalone build...${NC}"
         curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash 2>&1 || true
     else
@@ -352,7 +358,7 @@ ensure_agy_binary() {
         echo -e "${YELLOW}⚠️ Notice: Automated agy installation could not finish right now.${NC}"
         if [ "$OS_TYPE" = "termux" ]; then
             echo -e "   You can install it anytime in Termux using:"
-            echo -e "   ${CYAN}curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash${NC}"
+            echo -e "   ${CYAN}pkg install -y glibc-repo && pkg install -y glibc ca-certificates resolv-conf && curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash${NC}"
         else
             echo -e "   ${CYAN}curl -fsSL https://antigravity.google/cli/install.sh | bash${NC}"
         fi

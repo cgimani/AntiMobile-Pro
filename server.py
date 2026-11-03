@@ -1087,7 +1087,7 @@ async def execute_agy_turn(chat_id: str, prompt: str, ws_client: Optional[tornad
 
     agy_bin = find_agy_binary()
     if not os.path.exists(agy_bin):
-        termux_cmd = "curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
+        termux_cmd = "pkg install -y glibc-repo && pkg install -y glibc ca-certificates resolv-conf && curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
         err_msg = (
             "⚠️ **موتور هوش مصنوعی Antigravity CLI روی سیستم یافت نشد.**\n\n"
             f"برای فعال‌سازی و شروع چت، لطفاً دستور زیر را در ترموکس اجرا کنید:\n\n"
@@ -2568,6 +2568,7 @@ class CliLoginManager:
 
             is_termux = os.path.isdir('/data/data/com.termux/files/usr') or 'com.termux' in os.environ.get('PREFIX', '')
             install_cmd = (
+                "pkg install -y glibc-repo 2>/dev/null; pkg install -y glibc ca-certificates resolv-conf tar curl 2>/dev/null; "
                 "curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
                 if is_termux else
                 "curl -fsSL https://antigravity.google/cli/install.sh | bash"
@@ -2578,7 +2579,7 @@ class CliLoginManager:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT
                 )
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=180.0)
                 if stdout:
                     for line in stdout.decode('utf-8', errors='ignore').splitlines()[-8:]:
                         self.logs.append(line)
@@ -2590,7 +2591,7 @@ class CliLoginManager:
 
         if not os.path.exists(agy_bin):
             self.state = "error"
-            termux_cmd = "curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
+            termux_cmd = "pkg install -y glibc-repo && pkg install -y glibc ca-certificates resolv-conf && curl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash"
             self.error_message = (
                 f"موتور اصلی Antigravity CLI روی ترموکس نصب نشده است.\n"
                 f"لطفاً دستور زیر را در ترموکس اجرا کنید تا نصب شود:\n{termux_cmd}"
